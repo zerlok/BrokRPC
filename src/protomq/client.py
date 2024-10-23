@@ -31,8 +31,8 @@ class Client:
         self,
         *,
         routing_key: str,
-        publisher: PublisherOptions,
         serializer: Serializer[U, V],
+        publisher: PublisherOptions | None = None,
         queue: QueueOptions | None = None,
     ) -> t.AsyncIterator[UnaryUnaryCaller[U, V]]:
         caller_id = uuid.uuid4()
@@ -64,7 +64,7 @@ class Client:
                     requester=requester,
                     serializer=serializer,
                     options=MessageOptions(
-                        exchange=publisher.name,
+                        exchange=publisher.name if publisher is not None else None,
                         routing_key=routing_key,
                         reply_to=response_key,
                     ),
