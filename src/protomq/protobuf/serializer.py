@@ -18,6 +18,7 @@ class ProtobufSerializer[U: ProtobufMessage, V: ProtobufMessage](Serializer[U, V
         self,
         request_type: t.Type[U],
         response_type: t.Type[V],
+        *,
         strict: bool = True,
     ) -> None:
         self.__load_request = (

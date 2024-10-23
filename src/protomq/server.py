@@ -4,14 +4,30 @@ import asyncio
 import typing as t
 import warnings
 from collections import OrderedDict
+
+if t.TYPE_CHECKING:
+    from concurrent.futures import Executor
+
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from signal import Signals
 
+from protomq.sync_to_async import Sync2AsyncNormalizer
+
 if t.TYPE_CHECKING:
     from yarl import URL
 
-    from protomq.abc import BoundConsumer, Consumer, Driver, Publisher, Serializer, UnaryUnaryFunc
+    from protomq.abc import (
+        BoundConsumer,
+        Consumer,
+        Driver,
+        Publisher,
+        Serializer,
+        StreamStreamFunc,
+        StreamUnaryFunc,
+        UnaryStreamFunc,
+        UnaryUnaryFunc,
+    )
 
 from protomq.consumer import ConsumerExceptionDecorator, UnaryUnaryConsumer
 from protomq.driver.connect import connect
@@ -32,14 +48,39 @@ class ServerIsAlreadyRunningError(ServerError):
 
 
 @dataclass(frozen=True, kw_only=True)
-class UnaryUnaryConsumerConfig[U, V]:
-    func: UnaryUnaryFunc[U, V]
+class BaseConsumerConfig[U, V]:
     serializer: Serializer[U, V]
     bindings: BindingOptions
     consumer: ConsumerOptions
 
 
-type ConsumerConfig = UnaryUnaryConsumerConfig[t.Any, t.Any]
+@dataclass(frozen=True, kw_only=True)
+class UnaryUnaryConsumerConfig[U, V](BaseConsumerConfig[U, V]):
+    func: UnaryUnaryFunc[U, V]
+
+
+@dataclass(frozen=True, kw_only=True)
+class UnaryStreamConsumerConfig[U, V](BaseConsumerConfig[U, V]):
+    func: UnaryStreamFunc[U, V]
+
+
+@dataclass(frozen=True, kw_only=True)
+class StreamUnaryConsumerConfig[U, V](BaseConsumerConfig[U, V]):
+    func: StreamUnaryFunc[U, V]
+
+
+@dataclass(frozen=True, kw_only=True)
+class StreamStreamConsumerConfig[U, V](BaseConsumerConfig[U, V]):
+    func: StreamStreamFunc[U, V]
+
+
+type ConsumerConfig[U, V] = (
+    UnaryUnaryConsumerConfig[U, V]
+    # TODO: support other consumers
+    # | UnaryStreamConsumerConfig[U, V]
+    # | StreamUnaryConsumerConfig[U, V]
+    # | StreamStreamConsumerConfig[U, V]
+)
 
 
 class Server:
@@ -49,11 +90,13 @@ class Server:
         async with connect(url) as driver:
             yield cls(driver)
 
-    def __init__(self, driver: Driver) -> None:
+    def __init__(self, driver: Driver, executor: Executor | None = None) -> None:
         self.__driver = driver
+        self.__executor = executor
         self.__cm_stack = AsyncExitStack()
-        self.__consumers: t.OrderedDict[object, ConsumerConfig] = OrderedDict()
+        self.__consumers: t.OrderedDict[object, ConsumerConfig[t.Any, t.Any]] = OrderedDict()
         self.__bound_consumers: list[BoundConsumer] = []
+        self.__sync2async = Sync2AsyncNormalizer(executor)
 
     def __del__(self) -> None:
         if self.is_running:
@@ -63,27 +106,75 @@ class Server:
     def is_running(self) -> bool:
         return len(self.__bound_consumers) > 0
 
+    def register_consumer[U, V](
+        self,
+        config: ConsumerConfig[U, V],
+    ) -> None:
+        if (registered := self.__consumers.get(config.func)) is not None:
+            raise ConsumerAlreadyRegisteredError(config, registered)
+
+        self.__consumers[config.func] = config
+
     def register_unary_unary_consumer[U, V](
         self,
         *,
-        func: UnaryUnaryFunc[U, V],
+        func: UnaryUnaryFunc[U, V] | t.Callable[[U], V],
         serializer: Serializer[U, V],
         bindings: BindingOptions,
     ) -> None:
-        if (registered := self.__consumers.get(func)) is not None:
-            raise ConsumerAlreadyRegisteredError(func, registered)
-
         consumer = ConsumerOptions.load(func)
 
-        self.__consumers[func] = UnaryUnaryConsumerConfig(
-            func=func,
-            serializer=serializer,
-            bindings=replace(
-                bindings,
-                queue=self.__collect_queue_options(consumer, bindings.queue),
-            ),
-            consumer=consumer,
+        self.register_consumer(
+            UnaryUnaryConsumerConfig(
+                func=self.__sync2async.normalize_unary_unary(func),
+                serializer=serializer,
+                bindings=replace(
+                    bindings,
+                    queue=self.__collect_queue_options(consumer, bindings.queue),
+                ),
+                consumer=consumer,
+            )
         )
+
+    def register_unary_stream_consumer[U, V](
+        self,
+        *,
+        func: UnaryStreamFunc[U, V] | t.Callable[[U], t.Iterable[V]],
+        serializer: Serializer[U, V],
+        bindings: BindingOptions,
+    ) -> None:
+        raise NotImplementedError
+        # consumer = ConsumerOptions.load(func)
+        #
+        # self.register_consumer(
+        #     UnaryStreamConsumerConfig(
+        #         func=self.__sync2async.normalize_unary_stream(func),
+        #         serializer=serializer,
+        #         bindings=replace(
+        #             bindings,
+        #             queue=self.__collect_queue_options(consumer, bindings.queue),
+        #         ),
+        #         consumer=consumer,
+        #     )
+        # )
+
+    def register_stream_unary_consumer[U, V](
+        self,
+        *,
+        func: StreamUnaryFunc[U, V],
+        serializer: Serializer[U, V],
+        bindings: BindingOptions,
+    ) -> None:
+        raise NotImplementedError
+
+    def register_stream_stream_consumer[U, V](
+        self,
+        *,
+        func: StreamStreamFunc[U, V],
+        serializer: Serializer[U, V],
+        bindings: BindingOptions,
+    ) -> None:
+        raise NotImplementedError
 
     async def start(self) -> None:
         if self.is_running:
@@ -109,7 +200,7 @@ class Server:
         await self.__cm_stack.aclose()
         assert not self.is_running
 
-    def __build_consumer(self, config: ConsumerConfig, responder: Publisher) -> Consumer:
+    def __build_consumer(self, config: ConsumerConfig[object, object], responder: Publisher) -> Consumer:
         consumer: Consumer
 
         match config:
