@@ -1,0 +1,79 @@
+[tool.poetry]
+name = "protomq"
+version = "0.1.0"
+description = ""
+authors = ["zerlok <danil.troshnev@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+protobuf = "^5.26.1"
+aiormq = {version = "^6.8.1"}
+
+[tool.poetry.group.dev.dependencies]
+types-protobuf = "^5.26.0.20240422"
+mypy = "^1.10.0"
+pytest = "^8.2.0"
+pytest-cov = "^5.0.0"
+ruff = "^0.4.9"
+pytest-asyncio = "^0.24.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+include = ["src/**/*.py", "tests/**/*.py"]
+exclude = ["**_pb2.py", "**_pb2.pyi", "**_pb2_grpc.py", "**_pb2_grpc.pyi"]
+line-length = 120
+output-format = "pylint"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN", # because we use mypy
+    "D", # TODO: add docstrings to public code
+    "FA", # TODO: consider should we use __annotations__
+    "TD", # no task tracking
+    "FIX", # TODO: consider enable it against new code on pull requests
+    "COM812", # because ruff format suggests to skip it
+    "ISC001", # because ruff format suggests to skip it
+    "RET505", # clashes with mypy exhaustiveness check
+    "S101", # allow asserts for tests checks and mypy help
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "ARG001", # it's ok to use a fixture with a side effect in a test.
+    "PT004", # fixture may add side effect and doesn't return anything.
+]
+
+
+[tool.mypy]
+files = ["src", "tests"]
+strict = true
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src",
+]
+addopts = [
+    "--cov=src",
+    "--cov-report=term-missing",
+]
+testpaths = [
+    "tests",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "@abc.abstractmethod",
+    "if __name__ == .__main__.:",
+]
+show_missing = true

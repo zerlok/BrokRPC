@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+import asyncio
+import typing as t
+import uuid
+from contextlib import contextmanager
+
+
+class WaiterStorage[T]:
+    @classmethod
+    @contextmanager
+    def create(cls) -> t.Iterator[WaiterStorage[T]]:
+        waiters: dict[uuid.UUID, asyncio.Future[T]] = {}
+        try:
+            yield cls(waiters)
+
+        finally:
+            for fut in waiters.values():
+                if not fut.done():
+                    fut.cancel()
+
+    def __init__(self, waiters: dict[uuid.UUID, asyncio.Future[T]]) -> None:
+        self.__waiters = waiters
+
+    @contextmanager
+    def context(self) -> t.Iterator[tuple[str, asyncio.Future[T]]]:
+        key = uuid.uuid4()
+        fut = self.__waiters[key] = asyncio.Future[T]()
+
+        try:
+            yield key.hex, fut
+
+        finally:
+            if not fut.done():
+                fut.cancel()
+
+            self.__waiters.pop(key, None)
+
+    def set_result(self, key: str, value: T) -> None:
+        self.__waiters[uuid.UUID(hex=key)].set_result(value)
+
+    def set_exception(self, key: str, value: Exception) -> None:
+        self.__waiters[uuid.UUID(hex=key)].set_exception(value)
+
+    def set_cancel(self, key: str, reason: str | None) -> None:
+        self.__waiters[uuid.UUID(hex=key)].cancel(reason)
+
+
+# class StreamStorage[T]:
+#     def __init__(self) -> None:
+#         self.__waiters: dict[uuid.UUID, Stream[T]] = {}
+#
+#     @contextmanager
+#     async def context(self) -> t.Iterator[tuple[str, Reader[T]]]:
+#         key = uuid.uuid4()
+#         try:
+#             async with closing(Queue()) as queue:
+#                 self.__waiters[key] = queue
+#
+#                 yield key.hex, queue
+#
+#         finally:
+#             self.__waiters.pop(key, None)
+#
+#     async def push_result(self, key: str, value: T) -> None:
+#         await self.__waiters[uuid.UUID(hex=key)].write(value)
