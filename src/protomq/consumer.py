@@ -1,179 +1,52 @@
-from datetime import timedelta
+from __future__ import annotations
 
-from protomq.abc import Consumer, Publisher, Serializer, UnaryStreamFunc, UnaryUnaryFunc
-from protomq.message import ConsumerAck, ConsumerReject, ConsumerResult, ConsumerRetry, Message
-from protomq.options import ConsumerOptions, MessageOptions
-from protomq.storage import WaiterStorage
+import asyncio
+import typing as t
+from concurrent.futures import Executor
+
+from protomq.abc import Consumer
 
 
-class ConsumerExceptionDecorator(Consumer):
-    @classmethod
-    def from_consume_options(cls, inner: Consumer, options: ConsumerOptions) -> Consumer:
-        errors: tuple[type[Exception], ...]
-
-        match options.retry_on_error:
-            case True:
-                errors = (Exception,)
-            case False | None:
-                errors = ()
-            case tuple():
-                errors = options.retry_on_error
-            case error_type:
-                errors = (error_type,)
-
-        delay: timedelta | None
-
-        match options.retry_delay:
-            case float():
-                delay = timedelta(seconds=options.retry_delay)
-            case value:
-                delay = value
-
-        return cls(inner, errors, delay) if errors else inner
-
-    def __init__(
-        self,
-        inner: Consumer,
-        retry_on_exceptions: tuple[type[Exception], ...],
-        delay: timedelta | None = None,
-    ) -> None:
+class DecodingConsumer[A, V, B](Consumer[A, V]):
+    def __init__(self, inner: Consumer[B, V], decoder: t.Callable[[A], B]) -> None:
         self.__inner = inner
-        self.__retry_on_exceptions = retry_on_exceptions
-        self.__delay = delay
+        self.__decoder = decoder
 
-    async def consume(self, message: Message) -> ConsumerResult:
-        try:
-            result = await self.__inner.consume(message)
-
-        except self.__retry_on_exceptions as err:
-            result = ConsumerRetry(
-                reason=f"exception occurred: {err}",
-                delay=self.__delay,
-            )
+    async def consume(self, message: A) -> V:
+        decoded_message = self.__decoder(message)
+        result = await self.__inner.consume(decoded_message)
 
         return result
 
 
-class UnaryUnaryConsumer[U, V](Consumer):
-    def __init__(
-        self,
-        inner: UnaryUnaryFunc[U, V],
-        serializer: Serializer[U, V],
-        responder: Publisher,
-    ) -> None:
+class EncodingConsumer[U, A, B](Consumer[U, A]):
+    def __init__(self, inner: Consumer[U, B], encode: t.Callable[[B], A]) -> None:
         self.__inner = inner
-        self.__serializer = serializer
-        self.__responder = responder
+        self.__encode = encode
 
-    async def consume(self, request: Message) -> ConsumerResult:
-        if request.reply_to is None or request.correlation_id is None:
-            return ConsumerReject(reason="reply_to and correlation_id are required")
+    async def consume(self, message: U) -> A:
+        result = await self.__inner.consume(message)
+        encoded_result = self.__encode(result)
 
-        request_payload = self.__serializer.load_request(request)
-        response_payload: V | Exception
-        try:
-            response_payload = await self.__inner(request_payload)
-
-        # NOTE: Caught exception will be serialized to response and client will receive it.
-        except Exception as err:  # noqa: BLE001
-            response_payload = err
-
-        response = self.__serializer.dump_response(
-            request=request,
-            response=response_payload,
-            options=MessageOptions(
-                exchange=request.exchange,
-                routing_key=request.reply_to,
-                correlation_id=request.correlation_id,
-            ),
-        )
-        await self.__responder.publish(response)
-
-        return ConsumerAck()
+        return encoded_result
 
 
-class UnaryStreamConsumer[U, V](Consumer):
-    def __init__(
-        self,
-        inner: UnaryStreamFunc[U, V],
-        serializer: Serializer[U, V],
-        responder: Publisher,
-    ) -> None:
-        self.__inner = inner
-        self.__serializer = serializer
-        self.__responder = responder
+class SyncFuncConsumer[U, V](Consumer[U, V]):
+    def __init__(self, func: t.Callable[[U], V], executor: Executor | None = None) -> None:
+        self.__func = func
+        self.__executor = executor
 
-    async def consume(self, request: Message) -> ConsumerResult:
-        if request.reply_to is None or request.correlation_id is None:
-            return ConsumerReject(reason="reply_to and correlation_id are required")
+    async def consume(self, message: U) -> V:
+        result = await asyncio.get_running_loop().run_in_executor(self.__executor, self.__func, message)
 
-        request_payload = self.__serializer.load_request(request)
-
-        try:
-            async for response_payload in self.__inner(request_payload):
-                response = self.__serializer.dump_response(
-                    request=request,
-                    response=response_payload,
-                    options=MessageOptions(
-                        exchange=request.exchange,
-                        routing_key=request.reply_to,
-                        correlation_id=request.correlation_id,
-                    ),
-                )
-                await self.__responder.publish(response)
-
-        # NOTE: Caught exception will be serialized to response and client will receive it.
-        except Exception as err:  # noqa: BLE001
-            await self.__responder.publish(
-                self.__serializer.dump_response(
-                    request=request,
-                    response=err,
-                    options=MessageOptions(
-                        exchange=request.exchange,
-                        routing_key=request.reply_to,
-                        correlation_id=request.correlation_id,
-                    ),
-                )
-            )
-
-        return ConsumerAck()
+        return result
 
 
-class UnaryResponseConsumer[U, V](Consumer):
-    def __init__(
-        self,
-        serializer: Serializer[U, V],
-        waiters: WaiterStorage[V],
-    ) -> None:
-        self.__serializer = serializer
-        self.__waiters = waiters
+class AsyncFuncConsumer[U, V](Consumer[U, V]):
+    def __init__(self, func: t.Callable[[U], t.Awaitable[V]]) -> None:
+        self.__func = func
 
-    async def consume(self, response: Message) -> ConsumerResult:
-        response_payload = self.__serializer.load_response(response)
-        if response.correlation_id is None:
-            return ConsumerReject()
+    async def consume(self, message: U) -> V:
+        result = await self.__func(message)
 
-        if isinstance(response_payload, Exception):
-            self.__waiters.set_exception(response.correlation_id, response_payload)
-
-        else:
-            self.__waiters.set_result(response.correlation_id, response_payload)
-
-        return ConsumerAck()
-
-
-# class StreamResponseHandler[T](Consumer):
-#     def __init__(
-#         self,
-#         serializer: Serializer[object, T],
-#         waiters: StreamStorage[T],
-#     ) -> None:
-#         self.__serializer = serializer
-#         self.__waiters = waiters
-#
-#     async def handle(self, response: IncomingMessage) -> None:
-#         response_payload = self.__serializer.load_response(response)
-#         if response.correlation_id is None:
-#             return
-#
-#         self.__waiters.push_result(response.correlation_id, response_payload)
+        return result

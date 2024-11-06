@@ -1,61 +1,31 @@
 import abc
 import typing as t
 
-from protomq.message import ConsumerResult, Message
-from protomq.options import BindingOptions, MessageOptions, PublisherOptions
+from protomq.message import ConsumerResult, PublisherResult, RawMessage
+from protomq.options import BindingOptions, PublisherOptions
 
 
-class UnaryUnaryFunc[U, V](t.Protocol):
+class Publisher[U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    async def __call__(self, request: U) -> V:
+    async def publish(self, message: U) -> V:
         raise NotImplementedError
 
 
-class UnaryStreamFunc[U, V](t.Protocol):
+class PublisherMiddleware[S, U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def __call__(self, request: U) -> t.AsyncIterable[V]:
+    async def publish(self, inner: S, message: U) -> V:
         raise NotImplementedError
 
 
-class StreamUnaryFunc[U, V](t.Protocol):
+class Consumer[U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    async def __call__(self, request: t.AsyncIterable[U]) -> V:
+    async def consume(self, message: U) -> V:
         raise NotImplementedError
 
 
-class StreamStreamFunc[U, V](t.Protocol):
+class ConsumerMiddleware[S, U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def __call__(self, request: t.AsyncIterable[U]) -> t.AsyncIterable[V]:
-        raise NotImplementedError
-
-
-class Serializer[U, V](metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def load_request(self, request: Message) -> U:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def dump_request(self, request: U, options: MessageOptions) -> Message:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def load_response(self, response: Message) -> V | Exception:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def dump_response(self, request: Message, response: V | Exception, options: MessageOptions) -> Message:
-        raise NotImplementedError
-
-
-class Publisher(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    async def publish(self, message: Message) -> None:
-        raise NotImplementedError
-
-
-class Consumer(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    async def consume(self, message: Message) -> ConsumerResult:
+    async def consume(self, inner: S, message: U) -> V:
         raise NotImplementedError
 
 
@@ -69,11 +39,25 @@ class BoundConsumer(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
-class Driver(metaclass=abc.ABCMeta):
+class Serializer[A, B](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncContextManager[Publisher]:
+    def dump_message(self, message: A) -> B:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def bind_consumer(self, consumer: Consumer, options: BindingOptions) -> t.AsyncContextManager[BoundConsumer]:
+    def load_message(self, message: B) -> A:
+        raise NotImplementedError
+
+
+type RawPublisher = Publisher[RawMessage, PublisherResult]
+type RawConsumer = Consumer[RawMessage, ConsumerResult]
+
+
+class Driver(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncContextManager[RawPublisher]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def bind_consumer(self, consumer: RawConsumer, options: BindingOptions) -> t.AsyncContextManager[BoundConsumer]:
         raise NotImplementedError

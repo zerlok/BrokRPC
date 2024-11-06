@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import typing as t
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from aiormq import Channel, Connection, ProtocolSyntaxError, spec
@@ -13,20 +12,28 @@ from pamqp.common import FieldTable
 
 if t.TYPE_CHECKING:
     from aiormq.abc import DeliveredMessage
-    from yarl import URL
 
-from protomq.abc import BoundConsumer, Consumer, Driver, Publisher
-from protomq.message import ConsumerAck, ConsumerReject, ConsumerResult, ConsumerRetry, Message
+from protomq.abc import BoundConsumer, Driver, Publisher, RawConsumer, RawPublisher
+from protomq.message import (
+    ConsumerAck,
+    ConsumerReject,
+    ConsumerResult,
+    ConsumerRetry,
+    Message,
+    PublisherResult,
+    RawMessage,
+)
 from protomq.options import (
     BindingOptions,
     ChannelOptions,
+    ConnectOptions,
     ExchangeOptions,
     PublisherOptions,
     QueueOptions,
 )
 
 
-class AiormqPublisher(Publisher):
+class AiormqPublisher(Publisher[RawMessage, PublisherResult]):
     def __init__(
         self,
         channel: Channel,
@@ -39,7 +46,7 @@ class AiormqPublisher(Publisher):
         self.__message_id_gen = message_id_gen
         self.__now = now
 
-    async def publish(self, message: Message) -> None:
+    async def publish(self, message: RawMessage) -> PublisherResult:
         await self.__channel.basic_publish(
             body=message.body,
             exchange=message.exchange
@@ -60,38 +67,41 @@ class AiormqPublisher(Publisher):
                 correlation_id=message.correlation_id,
                 reply_to=message.reply_to,
                 expiration=message.expiration,
-                message_id=self.__message_id_gen(),
-                timestamp=self.__now(),
+                message_id=message.message_id if message.message_id is not None else self.__message_id_gen(),
+                timestamp=message.timestamp if message.timestamp is not None else self.__now(),
                 message_type=message.message_type,
                 user_id=message.user_id,
                 app_id=message.app_id,
             ),
         )
 
+        return None
+
 
 class AiormqConsumerCallback:
-    def __init__(self, channel: Channel, inner: Consumer) -> None:
+    def __init__(self, channel: Channel, inner: RawConsumer) -> None:
         self.__channel = channel
         self.__inner = inner
 
     async def __call__(self, aiormq_message: DeliveredMessage) -> None:
         assert isinstance(aiormq_message.delivery_tag, int)
 
-        try:
-            message = self.__build_message(aiormq_message)
-            result = await self.__inner.consume(message)
+        message = self.__build_message(aiormq_message)
+        result = await self.__inner.consume(message)
+        await self.__handle_result(aiormq_message, result)
 
-        except Exception as err:
-            logging.exception("fatal consumer err", exc_info=err)
-            await self.__channel.basic_reject(
-                delivery_tag=aiormq_message.delivery_tag,
-                requeue=False,
-            )
+        # try:
+        #
+        # except Exception as err:
+        #     logging.exception("fatal consumer err", exc_info=err)
+        #     await self.__channel.basic_reject(
+        #         delivery_tag=aiormq_message.delivery_tag,
+        #         requeue=False,
+        #     )
+        #
+        # else:
 
-        else:
-            await self.__handle_result(aiormq_message, result)
-
-    def __build_message(self, message: DeliveredMessage) -> Message:
+    def __build_message(self, message: DeliveredMessage) -> RawMessage:
         assert isinstance(message.routing_key, str)
 
         return Message(
@@ -117,16 +127,22 @@ class AiormqConsumerCallback:
         assert isinstance(message.delivery_tag, int)
 
         match result:
-            case ConsumerAck():
+            case ConsumerAck() | True | None:
                 await self.__channel.basic_ack(message.delivery_tag)
 
-            case ConsumerReject():
-                await self.__channel.basic_nack(message.delivery_tag, requeue=False)
+            case ConsumerReject() | False:
+                await self.__channel.basic_reject(message.delivery_tag, requeue=False)
 
             case ConsumerRetry(delay=delay):
                 if delay is not None:
                     await asyncio.sleep(delay.total_seconds())
-                await self.__channel.basic_nack(message.delivery_tag)
+
+                # TODO: AMQP returns message to the head of the queue, think about option to return it to the end of the
+                #  queue (real requeue).
+                await self.__channel.basic_reject(message.delivery_tag)
+
+            case _:
+                t.assert_never(result)
 
 
 class AiormqBoundConsumer(BoundConsumer):
@@ -152,18 +168,13 @@ class AiormqBoundConsumer(BoundConsumer):
 class AiormqDriver(Driver):
     @classmethod
     @asynccontextmanager
-    async def connect(
-        cls,
-        url: URL,
-        max_attempts: int = 10,
-        attempt_delay: timedelta = timedelta(seconds=3.0),
-    ) -> t.AsyncIterator[AiormqDriver]:
-        conn = Connection(url)
+    async def connect(cls, options: ConnectOptions) -> t.AsyncIterator[AiormqDriver]:
+        conn = Connection(options.url)
 
-        err = await cls.__try_connect(conn, max_attempts, attempt_delay.total_seconds())
+        err = await cls.__try_connect(conn, options.max_attempts, options.attempt_delay.total_seconds())
         if err is not None:
             details = "can't connect to rabbitmq"
-            raise ConnectionError(details, url) from err
+            raise ConnectionError(details, options.url) from err
 
         try:
             yield cls(conn)
@@ -175,12 +186,12 @@ class AiormqDriver(Driver):
         self.__connection = connection
 
     @asynccontextmanager
-    async def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncIterator[Publisher]:
+    async def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncIterator[RawPublisher]:
         async with self.__provide_channel(options) as channel:
             yield AiormqPublisher(channel, options, self.__gen_message_id, self.__get_now)
 
     @asynccontextmanager
-    async def bind_consumer(self, consumer: Consumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
+    async def bind_consumer(self, consumer: RawConsumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
         channel: Channel
 
         async with self.__provide_channel(options.queue) as channel:
@@ -244,12 +255,15 @@ class AiormqDriver(Driver):
         type_ = options.type if options is not None and options.type is not None else "direct"
         durable = options.durable if options is not None and options.durable is not None else False
         auto_delete = options.auto_delete if options is not None and options.auto_delete is not None else False
+        arguments = options.arguments if options is not None and options.arguments is not None else None
 
         await channel.exchange_declare(
             exchange=name,
             exchange_type=type_,
             durable=durable,
             auto_delete=auto_delete,
+            # TODO: remove ignore
+            arguments=arguments,  # type: ignore[arg-type]
         )
 
         return name, ExchangeOptions(
@@ -257,6 +271,7 @@ class AiormqDriver(Driver):
             type=type_,
             durable=durable,
             auto_delete=auto_delete,
+            arguments=arguments,
         )
 
     async def __setup_queue(
@@ -268,12 +283,15 @@ class AiormqDriver(Driver):
         durable = options.durable if options is not None and options.durable is not None else False
         exclusive = options.exclusive if options is not None and options.exclusive is not None else False
         auto_delete = options.auto_delete if options is not None and options.auto_delete is not None else False
+        arguments = options.arguments if options is not None and options.arguments is not None else None
 
         declare_ok = await channel.queue_declare(
             queue=name,
             durable=durable,
             exclusive=exclusive,
             auto_delete=auto_delete,
+            # TODO: remove ignore
+            arguments=arguments,  # type: ignore[arg-type]
         )
         assert isinstance(declare_ok.queue, str)
 
@@ -282,6 +300,7 @@ class AiormqDriver(Driver):
             durable=durable,
             exclusive=exclusive,
             auto_delete=auto_delete,
+            arguments=arguments,
         )
 
     async def __bind(self, channel: Channel, options: BindingOptions) -> BindingOptions:
