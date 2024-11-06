@@ -178,8 +178,12 @@ class Connection(t.AsyncContextManager["Connection"]):
         serializer: Serializer[T, RawMessage] | None = None,
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]:
-        # TODO: remove cast to any
-        return self.consumer_builder().add_serializer(serializer).build(t.cast(t.Any, consumer), options)
+        return (
+            self.consumer_builder()
+            .add_serializer(serializer)
+            # TODO: remove cast to any
+            .build(t.cast(t.Any, consumer), options, executor=executor)
+        )
 
     def publisher_builder(self) -> PublisherBuilder[RawMessage, PublisherResult]:
         return (

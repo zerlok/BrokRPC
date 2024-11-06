@@ -49,7 +49,7 @@ class JSONSerializer(Serializer[Message[object], RawMessage]):
 
     def load_message(self, message: RawMessage) -> Message[object]:
         if message.content_type != self.__CONTENT_TYPE:
-            details = "can't decode non-json message"
+            details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)
 
         try:
@@ -96,11 +96,11 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], RawMessage])
 
     def load_message(self, message: RawMessage) -> Message[T]:
         if message.content_type != self.__CONTENT_TYPE:
-            details = "invalid content type"
+            details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)
 
         if message.message_type != self.__message_type.DESCRIPTOR.full_name:
-            details = "invalid message type"
+            details = f"invalid message type: {message.message_type}"
             raise SerializerLoadError(details, message)
 
         try:

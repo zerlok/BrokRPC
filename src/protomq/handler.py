@@ -5,8 +5,9 @@ import typing as t
 from concurrent.futures import Executor
 
 from protomq.abc import Consumer, Publisher, Serializer
-from protomq.message import ConsumerReject, ConsumerResult, Message, RawMessage
+from protomq.message import ConsumerAck, ConsumerReject, ConsumerResult, Message, RawMessage
 from protomq.options import MessageOptions
+from protomq.rpc.storage import WaiterStorage
 
 
 class SyncFuncHandler[U, V](Consumer[RawMessage, ConsumerResult]):
@@ -67,6 +68,21 @@ class AsyncFuncHandler[U, V](Consumer[RawMessage, ConsumerResult]):
         result = await self.__replier.publish(response_message)
 
         return result
+
+
+class HandlerReplyConsumer[T](Consumer[RawMessage, ConsumerResult]):
+    def __init__(self, serializer: Serializer[T, RawMessage], storage: WaiterStorage[T]) -> None:
+        self.__serializer = serializer
+        self.__storage = storage
+
+    async def consume(self, response_message: RawMessage) -> ConsumerResult:
+        if response_message.correlation_id is None:
+            return ConsumerReject(reason=f"can't get correlation id from response message: {response_message}")
+
+        response_payload = self.__serializer.load_message(response_message)
+        self.__storage.set_result(response_message.correlation_id, response_payload)
+
+        return ConsumerAck()
 
 
 def get_reply_options(request_message: Message[t.Any]) -> MessageOptions | None:
