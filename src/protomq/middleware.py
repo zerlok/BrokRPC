@@ -6,6 +6,7 @@ from datetime import timedelta
 from protomq.abc import Consumer, ConsumerMiddleware, Publisher, PublisherMiddleware
 from protomq.model import ConsumerResult, ConsumerRetry
 from protomq.options import ConsumerOptions
+from protomq.stringify import to_str_obj
 
 
 class PublisherMiddlewareWrapper[T, U, V](Publisher[U, V]):
@@ -14,7 +15,7 @@ class PublisherMiddlewareWrapper[T, U, V](Publisher[U, V]):
         self.__middleware = middleware
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: inner={self.__inner}; middleware={self.__middleware}>"
+        return to_str_obj(self, inner=self.__inner, middleware=self.__middleware)
 
     async def publish(self, message: U) -> V:
         return await self.__middleware.publish(self.__inner, message)
@@ -26,7 +27,7 @@ class ConsumerMiddlewareWrapper[T, U, V](Consumer[U, V]):
         self.__middleware = middleware
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: inner={self.__inner}; middleware={self.__middleware}>"
+        return to_str_obj(self, inner=self.__inner, middleware=self.__middleware)
 
     async def consume(self, message: U) -> V:
         return await self.__middleware.consume(self.__inner, message)

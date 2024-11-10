@@ -1,18 +1,20 @@
 import asyncio
 from datetime import timedelta
-from pprint import pprint
 
 from protomq.broker import Broker
 from protomq.middleware import RetryOnErrorConsumerMiddleware
 from protomq.options import ExchangeOptions
 from protomq.rpc.client import Client
+from protomq.rpc.model import Request
 from protomq.rpc.server import Server
 from protomq.serializer.json import JSONSerializer
 
 
 # define app RPC handler
-async def handle_request(msg: object) -> str:
-    return f"I greet you, {msg}"
+async def handle_request(request: Request[object]) -> str:
+    print(f"{request=!s}")
+    print(f"{request.body=}")
+    return f"I greet you, {request.body}"
 
 
 async def main() -> None:
@@ -47,9 +49,11 @@ async def main() -> None:
             # timeout=timedelta(seconds=10.0),
         ) as caller,
     ):
+        print(server)
         # publish app message & receive RPC response
         response = await caller.invoke("John")
-        pprint(response)  # noqa: T203
+        print(response)
+        print(f"{response.body=}")
 
 
 if __name__ == "__main__":

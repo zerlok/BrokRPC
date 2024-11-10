@@ -1,7 +1,8 @@
 import abc
 import typing as t
 
-from protomq.model import ConsumerResult, PublisherResult, RawMessage
+from protomq.message import BinaryMessage
+from protomq.model import ConsumerResult, PublisherResult
 from protomq.options import BindingOptions, PublisherOptions
 
 
@@ -49,15 +50,15 @@ class Serializer[A, B](metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
-type RawPublisher = Publisher[RawMessage, PublisherResult]
-type RawConsumer = Consumer[RawMessage, ConsumerResult]
+type BinaryPublisher = Publisher[BinaryMessage, PublisherResult]
+type BinaryConsumer = Consumer[BinaryMessage, ConsumerResult]
 
 
-class Driver(metaclass=abc.ABCMeta):
+class BrokerDriver(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncContextManager[RawPublisher]:
+    def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncContextManager[BinaryPublisher]:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def bind_consumer(self, consumer: RawConsumer, options: BindingOptions) -> t.AsyncContextManager[BoundConsumer]:
+    def bind_consumer(self, consumer: BinaryConsumer, options: BindingOptions) -> t.AsyncContextManager[BoundConsumer]:
         raise NotImplementedError

@@ -1,17 +1,16 @@
-from protomq.model import Message, RawMessage
 from protomq.rpc.abc import CallerSerializer, HandlerSerializer
-from protomq.rpc.model import Request, Response
+from protomq.rpc.model import BinaryRequest, BinaryResponse
 
 
-class RawRPCSerializer(CallerSerializer[bytes, Message[bytes]], HandlerSerializer[Request[bytes], bytes]):
-    def dump_unary_request(self, request: Request[bytes]) -> Request[bytes]:
+class RawRPCSerializer(CallerSerializer[bytes, bytes], HandlerSerializer[bytes, bytes]):
+    def dump_unary_request(self, request: BinaryRequest) -> BinaryRequest:
         return request
 
-    def load_unary_request(self, request: Request[bytes]) -> Request[bytes]:
+    def load_unary_request(self, request: BinaryRequest) -> BinaryRequest:
         return request
 
-    def dump_unary_response(self, response: Response[Request[bytes], bytes]) -> RawMessage:
+    def dump_unary_response(self, response: BinaryResponse) -> BinaryResponse:
         return response
 
-    def load_unary_response(self, response: RawMessage) -> Message[bytes]:
+    def load_unary_response(self, response: BinaryResponse) -> BinaryResponse:
         return response

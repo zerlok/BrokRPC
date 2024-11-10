@@ -3,8 +3,8 @@ from datetime import timedelta
 from pprint import pprint
 
 from protomq.broker import Broker
+from protomq.message import AppMessage, Message
 from protomq.middleware import RetryOnErrorConsumerMiddleware
-from protomq.model import Message
 from protomq.options import BindingOptions, ExchangeOptions, QueueOptions
 from protomq.serializer.json import JSONSerializer
 
@@ -37,7 +37,7 @@ async def main() -> None:
         broker.publisher(serializer=serializer) as pub,
     ):
         # publish app message
-        message_to_publish = Message(body={"content": "hello world"}, routing_key=routing_key)
+        message_to_publish = AppMessage(body={"content": "hello world"}, routing_key=routing_key)
         await pub.publish(message_to_publish)
 
         # wait for consumed message & do checks

@@ -11,19 +11,19 @@ from aiormq import Channel, Connection, ProtocolSyntaxError, spec
 from pamqp.common import FieldTable
 
 from protomq.retry import Retryer
+from protomq.stringify import to_str_obj
 
 if t.TYPE_CHECKING:
     from aiormq.abc import DeliveredMessage
 
-from protomq.abc import BoundConsumer, Driver, Publisher, RawConsumer, RawPublisher
+from protomq.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, BrokerDriver, Publisher
+from protomq.message import BinaryMessage, Message
 from protomq.model import (
     ConsumerAck,
     ConsumerReject,
     ConsumerResult,
     ConsumerRetry,
-    Message,
     PublisherResult,
-    RawMessage,
 )
 from protomq.options import (
     BindingOptions,
@@ -35,7 +35,83 @@ from protomq.options import (
 )
 
 
-class AiormqPublisher(Publisher[RawMessage, PublisherResult]):
+class AiormqMessage(Message[bytes]):
+    __slots__ = ("__impl",)
+
+    def __init__(self, impl: DeliveredMessage) -> None:
+        self.__impl = impl
+        assert isinstance(self.__impl.routing_key, str)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.__impl!r})"
+
+    @property
+    def body(self) -> bytes:
+        return self.__impl.body
+
+    @property
+    def routing_key(self) -> str:
+        assert isinstance(self.__impl.routing_key, str)
+        return self.__impl.routing_key
+
+    @property
+    def exchange(self) -> str | None:
+        return self.__impl.exchange
+
+    @property
+    def content_type(self) -> str | None:
+        return self.__impl.header.properties.content_type
+
+    @property
+    def content_encoding(self) -> str | None:
+        return self.__impl.header.properties.content_encoding
+
+    @property
+    def headers(self) -> t.Mapping[str, str] | None:
+        return t.cast(t.Mapping[str, str], self.__impl.header.properties.headers)
+
+    @property
+    def delivery_mode(self) -> int | None:
+        return self.__impl.header.properties.delivery_mode
+
+    @property
+    def priority(self) -> int | None:
+        return self.__impl.header.properties.priority
+
+    @property
+    def correlation_id(self) -> str | None:
+        return self.__impl.header.properties.correlation_id
+
+    @property
+    def reply_to(self) -> str | None:
+        return self.__impl.header.properties.reply_to
+
+    @property
+    def timeout(self) -> timedelta | None:
+        return _load_message_timeout(self.__impl.header.properties.expiration)
+
+    @property
+    def message_id(self) -> str | None:
+        return self.__impl.header.properties.message_id
+
+    @property
+    def timestamp(self) -> datetime | None:
+        return self.__impl.header.properties.timestamp
+
+    @property
+    def message_type(self) -> str | None:
+        return self.__impl.header.properties.message_type
+
+    @property
+    def user_id(self) -> str | None:
+        return self.__impl.header.properties.user_id
+
+    @property
+    def app_id(self) -> str | None:
+        return self.__impl.header.properties.app_id
+
+
+class AiormqPublisher(Publisher[BinaryMessage, PublisherResult]):
     def __init__(
         self,
         channel: Channel,
@@ -48,7 +124,7 @@ class AiormqPublisher(Publisher[RawMessage, PublisherResult]):
         self.__message_id_gen = message_id_gen
         self.__now = now
 
-    async def publish(self, message: RawMessage) -> PublisherResult:
+    async def publish(self, message: BinaryMessage) -> PublisherResult:
         await self.__channel.basic_publish(
             body=message.body,
             exchange=message.exchange
@@ -81,14 +157,15 @@ class AiormqPublisher(Publisher[RawMessage, PublisherResult]):
 
 
 class AiormqConsumerCallback:
-    def __init__(self, channel: Channel, inner: RawConsumer) -> None:
+    def __init__(self, channel: Channel, inner: BinaryConsumer) -> None:
         self.__channel = channel
         self.__inner = inner
 
     async def __call__(self, aiormq_message: DeliveredMessage) -> None:
         assert isinstance(aiormq_message.delivery_tag, int)
+        assert isinstance(aiormq_message.routing_key, str)
 
-        message = self.__build_message(aiormq_message)
+        message = AiormqMessage(aiormq_message)
         result = await self.__inner.consume(message)
         await self.__handle_result(aiormq_message, result)
 
@@ -103,28 +180,6 @@ class AiormqConsumerCallback:
         #     )
         #
         # else:
-
-    def __build_message(self, message: DeliveredMessage) -> RawMessage:
-        assert isinstance(message.routing_key, str)
-
-        return Message(
-            body=message.body,
-            exchange=message.exchange,
-            routing_key=message.routing_key,
-            content_type=message.header.properties.content_type,
-            content_encoding=message.header.properties.content_encoding,
-            headers=t.cast(t.Mapping[str, str], message.header.properties.headers),
-            delivery_mode=message.header.properties.delivery_mode,
-            priority=message.header.properties.priority,
-            correlation_id=message.header.properties.correlation_id,
-            reply_to=message.header.properties.reply_to,
-            timeout=_load_message_timeout(message.header.properties.expiration),
-            message_id=message.header.properties.message_id,
-            timestamp=message.header.properties.timestamp,
-            message_type=message.header.properties.message_type,
-            user_id=message.header.properties.user_id,
-            app_id=message.header.properties.app_id,
-        )
 
     async def __handle_result(self, message: DeliveredMessage, result: ConsumerResult) -> None:
         assert isinstance(message.delivery_tag, int)
@@ -168,10 +223,10 @@ class AiormqBoundConsumer(BoundConsumer):
         return self.__options
 
 
-class AiormqDriver(Driver):
+class AiormqBrokerDriver(BrokerDriver):
     @classmethod
     @asynccontextmanager
-    async def connect(cls, options: BrokerOptions) -> t.AsyncIterator[AiormqDriver]:
+    async def connect(cls, options: BrokerOptions) -> t.AsyncIterator[AiormqBrokerDriver]:
         conn = Connection(options.url)
 
         try:
@@ -191,13 +246,16 @@ class AiormqDriver(Driver):
     def __init__(self, connection: Connection) -> None:
         self.__connection = connection
 
+    def __str__(self) -> str:
+        return to_str_obj(self, connection=self.__connection)
+
     @asynccontextmanager
-    async def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncIterator[RawPublisher]:
+    async def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncIterator[BinaryPublisher]:
         async with self.__provide_channel(options) as channel:
             yield AiormqPublisher(channel, options, self.__gen_message_id, self.__get_now)
 
     @asynccontextmanager
-    async def bind_consumer(self, consumer: RawConsumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
+    async def bind_consumer(self, consumer: BinaryConsumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
         channel: Channel
 
         async with self.__provide_channel(options.queue) as channel:

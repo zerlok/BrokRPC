@@ -5,6 +5,7 @@ import typing as t
 from concurrent.futures import Executor
 
 from protomq.abc import Consumer
+from protomq.stringify import to_str_obj
 
 
 class DecodingConsumer[A, V, B](Consumer[A, V]):
@@ -13,7 +14,7 @@ class DecodingConsumer[A, V, B](Consumer[A, V]):
         self.__decoder = decoder
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.__inner}>"
+        return to_str_obj(self, inner=self.__inner)
 
     async def consume(self, message: A) -> V:
         decoded_message = self.__decoder(message)
@@ -28,7 +29,7 @@ class EncodingConsumer[U, A, B](Consumer[U, A]):
         self.__encode = encode
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.__inner}>"
+        return to_str_obj(self, inner=self.__inner)
 
     async def consume(self, message: U) -> A:
         result = await self.__inner.consume(message)
@@ -43,7 +44,7 @@ class SyncFuncConsumer[U, V](Consumer[U, V]):
         self.__executor = executor
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.__func}>"
+        return to_str_obj(self, inner=self.__func)
 
     async def consume(self, message: U) -> V:
         result = await asyncio.get_running_loop().run_in_executor(self.__executor, self.__func, message)
@@ -56,7 +57,7 @@ class AsyncFuncConsumer[U, V](Consumer[U, V]):
         self.__func = func
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.__func}>"
+        return to_str_obj(self, inner=self.__func)
 
     async def consume(self, message: U) -> V:
         result = await self.__func(message)

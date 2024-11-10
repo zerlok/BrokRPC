@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from protomq.abc import Publisher
+from protomq.stringify import to_str_obj
 
 
 class EncodingPublisher[A, V, B](Publisher[B, V]):
@@ -11,7 +12,7 @@ class EncodingPublisher[A, V, B](Publisher[B, V]):
         self.__encoder = encoder
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.__inner}>"
+        return to_str_obj(self, inner=self.__inner)
 
     async def publish(self, message: B) -> V:
         encoded_message = self.__encoder(message)
@@ -26,7 +27,7 @@ class DecodingPublisher[U, A, B](Publisher[U, B]):
         self.__decoder = decoder
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.__inner}>"
+        return to_str_obj(self, inner=self.__inner)
 
     async def publish(self, message: U) -> B:
         result = await self.__inner.publish(message)

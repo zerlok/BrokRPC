@@ -1,8 +1,7 @@
 import abc
 import typing as t
 
-from protomq.model import RawMessage
-from protomq.rpc.model import Request, Response
+from protomq.rpc.model import BinaryRequest, BinaryResponse, Request, Response
 
 type UnaryUnaryFunc[U, V] = t.Callable[[U], t.Awaitable[V]]
 type UnaryStreamFunc[U, V] = t.Callable[[U], t.AsyncIterable[V]]
@@ -19,39 +18,39 @@ class Caller[U, V](metaclass=abc.ABCMeta):
 
 class HandlerSerializer[U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def load_unary_request(self, request: Request[bytes]) -> U:
+    def load_unary_request(self, request: BinaryRequest) -> Request[U]:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def dump_unary_response(self, response: Response[U, V]) -> RawMessage:
+    def dump_unary_response(self, response: Response[V]) -> BinaryResponse:
         raise NotImplementedError
 
 
 class CallerSerializer[U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def dump_unary_request(self, request: Request[U]) -> Request[bytes]:
+    def dump_unary_request(self, request: Request[U]) -> BinaryRequest:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def load_unary_response(self, response: RawMessage) -> V:
+    def load_unary_response(self, response: BinaryResponse) -> Response[V]:
         raise NotImplementedError
 
 
 class RPCSerializer[U, V](HandlerSerializer[U, V], CallerSerializer[U, V], metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def dump_unary_request(self, request: Request[U]) -> Request[bytes]:
+    def dump_unary_request(self, request: Request[U]) -> BinaryRequest:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def load_unary_request(self, request: Request[bytes]) -> U:
+    def load_unary_request(self, request: BinaryRequest) -> Request[U]:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def dump_unary_response(self, response: Response[U, V]) -> RawMessage:
+    def dump_unary_response(self, response: Response[V]) -> BinaryResponse:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def load_unary_response(self, response: RawMessage) -> V:
+    def load_unary_response(self, response: BinaryResponse) -> Response[V]:
         raise NotImplementedError
 
     # @abc.abstractmethod

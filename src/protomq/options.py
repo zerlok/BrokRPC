@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import typing as t
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from dataclasses import asdict, dataclass, replace
 
-from yarl import URL
+if t.TYPE_CHECKING:
+    from datetime import datetime, timedelta
+
+    from _typeshed import DataclassInstance
+    from yarl import URL
+
 
 from protomq.retry import RetryOptions
 
@@ -99,3 +103,24 @@ class MessageOptions:
     message_type: str | None = None
     user_id: str | None = None
     app_id: str | None = None
+
+
+def merge_options[T: DataclassInstance](*options: T | None) -> T | None:
+    options_iter = iter(options)
+
+    result: T | None = None
+
+    for result in options_iter:
+        if result is not None:
+            break
+
+    if result is None:
+        return None
+
+    for opt in options_iter:
+        if opt is None:
+            continue
+
+        result = replace(result, **{k: v for k, v in asdict(opt).items() if v is not None})
+
+    return result

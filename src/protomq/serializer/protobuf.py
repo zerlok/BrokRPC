@@ -5,18 +5,17 @@ from google.protobuf.message import DecodeError, EncodeError
 from google.protobuf.message import Message as ProtobufMessage
 
 from protomq.abc import Serializer
-from protomq.exception import SerializerDumpError, SerializerLoadError
-from protomq.model import Message, RawMessage
-from protomq.options import MessageOptions
+from protomq.message import BinaryMessage, Message, PackedMessage, UnpackedMessage
+from protomq.model import SerializerDumpError, SerializerLoadError
 
 
-class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], RawMessage]):
+class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[bytes]]):
     __CONTENT_TYPE: t.Final[str] = "application/protobuf"
 
     def __init__(self, message_type: type[T]) -> None:
         self.__message_type = message_type
 
-    def dump_message(self, message: Message[T]) -> RawMessage:
+    def dump_message(self, message: Message[T]) -> PackedMessage[bytes]:
         assert isinstance(message, self.__message_type)
 
         try:
@@ -26,16 +25,15 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], RawMessage])
             details = f"can't encode protobuf message: {err}"
             raise SerializerDumpError(details, message) from err
 
-        return message.repack(
-            body,
-            MessageOptions(
-                content_type=self.__CONTENT_TYPE,
-                content_encoding=None,
-                message_type=message.body.DESCRIPTOR.full_name,
-            ),
+        return PackedMessage(
+            original=message,
+            body=body,
+            content_type=self.__CONTENT_TYPE,
+            content_encoding=None,
+            message_type=message.body.DESCRIPTOR.full_name,
         )
 
-    def load_message(self, message: RawMessage) -> Message[T]:
+    def load_message(self, message: BinaryMessage) -> UnpackedMessage[T]:
         if message.content_type != self.__CONTENT_TYPE:
             details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)
@@ -51,7 +49,10 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], RawMessage])
             details = f"can't decode protobuf message: {err}"
             raise SerializerLoadError(details, message) from err
 
-        return message.repack(body)
+        return UnpackedMessage(
+            original=message,
+            body=body,
+        )
 
 
 # class ProtobufRPCSerializer[U: ProtobufMessage, V: ProtobufMessage](RPCSerializer[U, V]):
@@ -59,16 +60,16 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], RawMessage])
 #         self.__request = ProtobufSerializer(request_type)
 #         self.__response = ProtobufSerializer(response_type)
 #
-#     def dump_unary_request(self, request: Request[U]) -> Request[bytes]:
+#     def dump_unary_request(self, request: Request[U]) -> BinaryRequest:
 #         return self.__request.dump_message(request)
 #
-#     def load_unary_request(self, request: Request[bytes]) -> Request[U]:
+#     def load_unary_request(self, request: BinaryRequest) -> Request[U]:
 #         return self.__request.load_message(request)
 #
-#     def dump_unary_response(self, response: Response[U, V]) -> RawMessage:
+#     def dump_unary_response(self, response: Response[U, V]) -> BinaryMessage:
 #         return self.__response.dump_message(response)
 #
-#     def load_unary_response(self, response: RawMessage) -> Message[V]:
+#     def load_unary_response(self, response: BinaryMessage) -> Message[V]:
 #         return self.__response.load_message(response)
 
 

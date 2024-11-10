@@ -1,15 +1,14 @@
 import typing as t
-from dataclasses import replace
 from json import JSONDecodeError, JSONDecoder, JSONEncoder
 
 from protomq.abc import Serializer
-from protomq.exception import SerializerDumpError, SerializerLoadError
-from protomq.model import Message, RawMessage
+from protomq.message import BinaryMessage, Message, PackedMessage, UnpackedMessage
+from protomq.model import SerializerDumpError, SerializerLoadError
 from protomq.rpc.abc import RPCSerializer
-from protomq.rpc.model import Request, Response
+from protomq.rpc.model import BinaryRequest, Request, Response
 
 
-class JSONSerializer(Serializer[Message[object], RawMessage], RPCSerializer[object, object]):
+class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[object, object]):
     __CONTENT_TYPE: t.Final[str] = "application/json"
 
     def __init__(
@@ -22,7 +21,7 @@ class JSONSerializer(Serializer[Message[object], RawMessage], RPCSerializer[obje
         self.__decoder = decoder if decoder is not None else JSONDecoder()
         self.__encoding = encoding if encoding is not None else "utf-8"
 
-    def dump_message(self, message: Message[object]) -> RawMessage:
+    def dump_message(self, message: Message[object]) -> PackedMessage[bytes]:
         encoding = message.content_encoding if message.content_encoding is not None else self.__encoding
         try:
             body = self.__encoder.encode(message.body).encode(encoding)
@@ -31,29 +30,30 @@ class JSONSerializer(Serializer[Message[object], RawMessage], RPCSerializer[obje
             details = "can't encode json message"
             raise SerializerDumpError(details, message) from err
 
-        return replace(
-            message.repack(body),
+        return PackedMessage(
+            original=message,
+            body=body,
             content_type=self.__CONTENT_TYPE,
             content_encoding=encoding,
         )
 
-    def load_message(self, message: RawMessage) -> Message[object]:
+    def load_message(self, message: BinaryMessage) -> UnpackedMessage[object]:
         obj = self.__load(message)
-        return message.repack(obj)
+        return UnpackedMessage(message, obj)
 
-    def dump_unary_request(self, request: Request[object]) -> Request[bytes]:
+    def dump_unary_request(self, request: Request[object]) -> BinaryRequest:
         return self.dump_message(request)
 
-    def load_unary_request(self, request: Request[bytes]) -> object:
-        return self.__load(request)
+    def load_unary_request(self, request: BinaryRequest) -> Request[object]:
+        return self.load_message(request)
 
-    def dump_unary_response(self, response: Response[object, object]) -> RawMessage:
+    def dump_unary_response(self, response: Response[object]) -> BinaryMessage:
         return self.dump_message(response)
 
-    def load_unary_response(self, response: RawMessage) -> object:
-        return self.__load(response)
+    def load_unary_response(self, response: BinaryMessage) -> Response[object]:
+        return self.load_message(response)
 
-    def __load(self, message: RawMessage) -> object:
+    def __load(self, message: BinaryMessage) -> object:
         if message.content_type != self.__CONTENT_TYPE:
             details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)

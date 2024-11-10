@@ -4,19 +4,20 @@ import asyncio
 import typing as t
 from datetime import timedelta
 
-from protomq.abc import RawPublisher
-from protomq.model import Message
+from protomq.abc import BinaryPublisher
+from protomq.message import AppMessage
 from protomq.rpc.abc import Caller
-from protomq.rpc.model import Request
+from protomq.rpc.model import BinaryRequest, Request
 from protomq.rpc.storage import WaiterStorage
+from protomq.stringify import to_str_obj
 
 
 class RequestCaller[U, V](Caller[U, V]):
     def __init__(
         self,
-        requester: RawPublisher,
+        requester: BinaryPublisher,
         routing_key: str,
-        serializer: t.Callable[[U], Request[bytes]],
+        serializer: t.Callable[[Request[U]], BinaryRequest],
         reply_to: str,
         storage: WaiterStorage[V],
         timeout: timedelta | None,
@@ -29,14 +30,14 @@ class RequestCaller[U, V](Caller[U, V]):
         self.__timeout = timeout
 
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: requester={self.__requester}; rk={self.__routing_key}; reply_to={self.__reply_to}>"
+        return to_str_obj(self, requester=self.__requester, routing_key=self.__routing_key, reply_to=self.__reply_to)
 
     async def invoke(self, request_payload: U) -> V:
         waiter: asyncio.Future[V]
 
         with self.__storage.context() as (correlation_id, waiter):
             request_message = self.__serializer(
-                Message(
+                AppMessage(
                     body=request_payload,
                     routing_key=self.__routing_key,
                     correlation_id=correlation_id,

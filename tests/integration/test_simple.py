@@ -2,9 +2,9 @@ import asyncio
 import typing as t
 
 import pytest
-from protomq.abc import RawPublisher
+from protomq.abc import BinaryPublisher
 from protomq.broker import Broker
-from protomq.model import Message, RawMessage
+from protomq.message import BinaryMessage, Message
 from protomq.options import BindingOptions, PublisherOptions
 
 from tests.stub.simple import SimpleConsumer
@@ -12,8 +12,8 @@ from tests.stub.simple import SimpleConsumer
 
 async def test_simple_consumer_receives_message(
     consumer: SimpleConsumer,
-    publisher: RawPublisher,
-    message: RawMessage,
+    publisher: BinaryPublisher,
+    message: BinaryMessage,
 ) -> None:
     await publisher.publish(message)
     received_message = await asyncio.wait_for(consumer.wait(), 5.0)
@@ -36,7 +36,7 @@ async def consumer(
 async def publisher(
     rabbitmq_connection: Broker,
     publisher_options: PublisherOptions,
-) -> t.AsyncIterator[RawPublisher]:
+) -> t.AsyncIterator[BinaryPublisher]:
     async with rabbitmq_connection.publisher(publisher_options) as pub:
         yield pub
 
@@ -52,5 +52,5 @@ def binding_options(publisher_options: PublisherOptions, message: Message[object
 
 
 @pytest.fixture()
-def message() -> RawMessage:
+def message() -> BinaryMessage:
     return Message(body=b"hello world", routing_key="test-simple")

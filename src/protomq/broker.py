@@ -9,18 +9,20 @@ from functools import partial
 from yarl import URL
 
 from protomq.abc import (
+    BinaryConsumer,
+    BinaryPublisher,
     BoundConsumer,
+    BrokerDriver,
     ConsumerMiddleware,
-    Driver,
     Publisher,
     PublisherMiddleware,
-    RawConsumer,
-    RawPublisher,
     Serializer,
 )
 from protomq.builder import ConsumerBuilder, PublisherBuilder, ident
-from protomq.model import ConsumerResult, PublisherResult, RawMessage
+from protomq.message import BinaryMessage
+from protomq.model import ConsumerResult, PublisherResult
 from protomq.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
+from protomq.stringify import to_str_obj
 
 type DSNOrBrokerOptions = str | URL | BrokerOptions
 
@@ -31,25 +33,28 @@ class Broker(t.AsyncContextManager["Broker"]):
         dsn: DSNOrBrokerOptions,
         default_exchange: ExchangeOptions | None = None,
         default_queue: QueueOptions | None = None,
-        default_publisher_middlewares: t.Sequence[PublisherMiddleware[RawPublisher, RawMessage, PublisherResult]]
+        default_publisher_middlewares: t.Sequence[PublisherMiddleware[BinaryPublisher, BinaryMessage, PublisherResult]]
         | None = None,
-        default_consumer_middlewares: t.Sequence[ConsumerMiddleware[RawConsumer, RawMessage, ConsumerResult]]
+        default_consumer_middlewares: t.Sequence[ConsumerMiddleware[BinaryConsumer, BinaryMessage, ConsumerResult]]
         | None = None,
     ) -> None:
-        self.__connect: t.Callable[[], t.AsyncContextManager[Driver]] = partial(connect, dsn)
+        self.__connect: t.Callable[[], t.AsyncContextManager[BrokerDriver]] = partial(connect, dsn)
         self.__default_exchange = default_exchange
         self.__default_queue = default_queue
         self.__default_publisher_middlewares: t.Sequence[
-            PublisherMiddleware[RawPublisher, RawMessage, PublisherResult]
+            PublisherMiddleware[BinaryPublisher, BinaryMessage, PublisherResult]
         ] = default_publisher_middlewares or ()
-        self.__default_consumer_middlewares: t.Sequence[ConsumerMiddleware[RawConsumer, RawMessage, ConsumerResult]] = (
-            default_consumer_middlewares or ()
-        )
+        self.__default_consumer_middlewares: t.Sequence[
+            ConsumerMiddleware[BinaryConsumer, BinaryMessage, ConsumerResult]
+        ] = default_consumer_middlewares or ()
 
         self.__stack = AsyncExitStack()
         self.__lock = asyncio.Lock()
         self.__opened = asyncio.Event()
-        self.__driver: Driver | None = None
+        self.__driver: BrokerDriver | None = None
+
+    def __str__(self) -> str:
+        return to_str_obj(self, is_connected=self.is_connected, driver=self.__driver)
 
     async def __aenter__(self) -> Broker:
         await self.connect()
@@ -94,7 +99,7 @@ class Broker(t.AsyncContextManager["Broker"]):
         return self.__driver is not None and self.__opened.is_set()
 
     @property
-    def driver(self) -> Driver:
+    def driver(self) -> BrokerDriver:
         if self.__driver is None:
             assert not self.is_connected
             details = "connection is not open"
@@ -107,42 +112,42 @@ class Broker(t.AsyncContextManager["Broker"]):
     def publisher[T](
         self,
         options: PublisherOptions | None = None,
-    ) -> t.AsyncContextManager[RawPublisher]: ...
+    ) -> t.AsyncContextManager[BinaryPublisher]: ...
 
     @t.overload
     def publisher[T](
         self,
         options: PublisherOptions | None = None,
         *,
-        serializer: t.Callable[[T], RawMessage] | Serializer[T, RawMessage],
+        serializer: t.Callable[[T], BinaryMessage] | Serializer[T, BinaryMessage],
     ) -> t.AsyncContextManager[Publisher[T, PublisherResult]]: ...
 
     def publisher[T](
         self,
         options: PublisherOptions | None = None,
         *,
-        serializer: t.Callable[[T], RawMessage] | Serializer[T, RawMessage] | None = None,
-    ) -> t.AsyncContextManager[RawPublisher] | t.AsyncContextManager[Publisher[T, PublisherResult]]:
+        serializer: t.Callable[[T], BinaryMessage] | Serializer[T, BinaryMessage] | None = None,
+    ) -> t.AsyncContextManager[BinaryPublisher] | t.AsyncContextManager[Publisher[T, PublisherResult]]:
         return self.builder_publisher().add_serializer(serializer).build(options)
 
     @t.overload
     def consumer[T](
         self,
-        consumer: RawConsumer,
+        consumer: BinaryConsumer,
         options: BindingOptions,
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
     @t.overload
     def consumer[T](
         self,
-        consumer: t.Callable[[RawMessage], t.Awaitable[ConsumerResult]],
+        consumer: t.Callable[[BinaryMessage], t.Awaitable[ConsumerResult]],
         options: BindingOptions,
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
     @t.overload
     def consumer[T](
         self,
-        consumer: t.Callable[[RawMessage], ConsumerResult],
+        consumer: t.Callable[[BinaryMessage], ConsumerResult],
         options: BindingOptions,
         *,
         executor: Executor | None = None,
@@ -154,7 +159,7 @@ class Broker(t.AsyncContextManager["Broker"]):
         consumer: t.Callable[[T], t.Awaitable[ConsumerResult]],
         options: BindingOptions,
         *,
-        serializer: t.Callable[[RawMessage], T] | Serializer[T, RawMessage],
+        serializer: t.Callable[[BinaryMessage], T] | Serializer[T, BinaryMessage],
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
     @t.overload
@@ -163,19 +168,19 @@ class Broker(t.AsyncContextManager["Broker"]):
         consumer: t.Callable[[T], ConsumerResult],
         options: BindingOptions,
         *,
-        serializer: t.Callable[[RawMessage], T] | Serializer[T, RawMessage],
+        serializer: t.Callable[[BinaryMessage], T] | Serializer[T, BinaryMessage],
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
     def consumer[T](
         self,
-        consumer: RawConsumer
-        | t.Callable[[RawMessage], t.Awaitable[ConsumerResult]]
-        | t.Callable[[RawMessage], ConsumerResult]
+        consumer: BinaryConsumer
+        | t.Callable[[BinaryMessage], t.Awaitable[ConsumerResult]]
+        | t.Callable[[BinaryMessage], ConsumerResult]
         | t.Callable[[T], t.Awaitable[ConsumerResult]]
         | t.Callable[[T], ConsumerResult],
         options: BindingOptions,
-        serializer: t.Callable[[RawMessage], T] | Serializer[T, RawMessage] | None = None,
+        serializer: t.Callable[[BinaryMessage], T] | Serializer[T, BinaryMessage] | None = None,
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]:
         return (
@@ -185,14 +190,14 @@ class Broker(t.AsyncContextManager["Broker"]):
             .build(t.cast(t.Any, consumer), options, executor=executor)
         )
 
-    def builder_publisher(self) -> PublisherBuilder[RawMessage, PublisherResult]:
+    def builder_publisher(self) -> PublisherBuilder[BinaryMessage, PublisherResult]:
         return (
             PublisherBuilder(self.__provide_publisher, ident)
             .set_exchange(self.__default_exchange)
             .add_middlewares(*self.__default_publisher_middlewares)
         )
 
-    def build_consumer(self) -> ConsumerBuilder[RawMessage, ConsumerResult]:
+    def build_consumer(self) -> ConsumerBuilder[BinaryMessage, ConsumerResult]:
         return (
             ConsumerBuilder(self.__bind_consumer, ident)
             .set_exchange(self.__default_exchange)
@@ -200,20 +205,22 @@ class Broker(t.AsyncContextManager["Broker"]):
             .add_middlewares(*self.__default_consumer_middlewares)
         )
 
-    def __provide_publisher(self, options: PublisherOptions | None) -> t.AsyncContextManager[RawPublisher]:
+    def __provide_publisher(self, options: PublisherOptions | None) -> t.AsyncContextManager[BinaryPublisher]:
         return self.driver.provide_publisher(options)
 
-    def __bind_consumer(self, consumer: RawConsumer, options: BindingOptions) -> t.AsyncContextManager[BoundConsumer]:
+    def __bind_consumer(
+        self, consumer: BinaryConsumer, options: BindingOptions
+    ) -> t.AsyncContextManager[BoundConsumer]:
         return self.driver.bind_consumer(consumer, options)
 
 
-def connect(options: DSNOrBrokerOptions) -> t.AsyncContextManager[Driver]:
+def connect(options: DSNOrBrokerOptions) -> t.AsyncContextManager[BrokerDriver]:
     clean_options = options if isinstance(options, BrokerOptions) else parse_dsn(options)
 
     if clean_options.driver == "aiormq":
-        from protomq.driver.aiormq import AiormqDriver
+        from protomq.driver.aiormq import AiormqBrokerDriver
 
-        return AiormqDriver.connect(clean_options)
+        return AiormqBrokerDriver.connect(clean_options)
 
     else:
         details = "unsupported driver"

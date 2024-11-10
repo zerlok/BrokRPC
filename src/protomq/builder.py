@@ -7,18 +7,18 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 
 from protomq.abc import (
+    BinaryConsumer,
+    BinaryPublisher,
     BoundConsumer,
     Consumer,
     ConsumerMiddleware,
     Publisher,
     PublisherMiddleware,
-    RawConsumer,
-    RawPublisher,
     Serializer,
 )
 from protomq.consumer import AsyncFuncConsumer, DecodingConsumer, SyncFuncConsumer
 from protomq.middleware import ConsumerMiddlewareWrapper, PublisherMiddlewareWrapper
-from protomq.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
+from protomq.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions, merge_options
 from protomq.publisher import EncodingPublisher
 
 
@@ -29,8 +29,8 @@ def ident[T](obj: T) -> T:
 class PublisherBuilder[U, V]:
     def __init__(
         self,
-        provider: t.Callable[[PublisherOptions | None], t.AsyncContextManager[RawPublisher]],
-        wrapper: t.Callable[[RawPublisher], Publisher[U, V]],
+        provider: t.Callable[[PublisherOptions | None], t.AsyncContextManager[BinaryPublisher]],
+        wrapper: t.Callable[[BinaryPublisher], Publisher[U, V]],
         exchange: ExchangeOptions | None = None,
     ) -> None:
         self.__provider = provider
@@ -38,7 +38,7 @@ class PublisherBuilder[U, V]:
         self.__exchange = exchange
 
     def set_exchange(self, exchange: ExchangeOptions | None) -> PublisherBuilder[U, V]:
-        return PublisherBuilder(self.__provider, self.__wrapper, exchange)
+        return PublisherBuilder(self.__provider, self.__wrapper, merge_options(self.__exchange, exchange))
 
     @t.overload
     def add_serializer(self, serializer: None) -> PublisherBuilder[U, V]: ...
@@ -49,14 +49,17 @@ class PublisherBuilder[U, V]:
     @t.overload
     def add_serializer[U2](self, serializer: Serializer[U2, U]) -> PublisherBuilder[U2, V]: ...
 
-    def add_serializer[U2](self, serializer: t.Callable[[U2], U] | Serializer[U2, U] | None) -> PublisherBuilder[U2, V]:
+    def add_serializer[U2](
+        self,
+        serializer: t.Callable[[U2], U] | Serializer[U2, U] | None,
+    ) -> PublisherBuilder[U2, V]:
         if serializer is None:
             return t.cast(PublisherBuilder[U2, V], self)
 
         inner_wrapper = self.__wrapper
         dump_message = serializer.dump_message if isinstance(serializer, Serializer) else serializer
 
-        def wrapper(inner: RawPublisher) -> Publisher[U2, V]:
+        def wrapper(inner: BinaryPublisher) -> Publisher[U2, V]:
             return EncodingPublisher(inner_wrapper(inner), dump_message)
 
         return PublisherBuilder(self.__provider, wrapper, self.__exchange)
@@ -67,7 +70,7 @@ class PublisherBuilder[U, V]:
     ) -> PublisherBuilder[U2, V2]:
         inner_wrapper = self.__wrapper
 
-        def wrapper(inner: RawPublisher) -> Publisher[U2, V2]:
+        def wrapper(inner: BinaryPublisher) -> Publisher[U2, V2]:
             return PublisherMiddlewareWrapper(inner_wrapper(inner), middleware)
 
         return PublisherBuilder(self.__provider, wrapper, self.__exchange)
@@ -106,8 +109,8 @@ class PublisherBuilder[U, V]:
 class ConsumerBuilder[U, V]:
     def __init__(
         self,
-        binder: t.Callable[[RawConsumer, BindingOptions], t.AsyncContextManager[BoundConsumer]],
-        wrapper: t.Callable[[Consumer[U, V]], RawConsumer],
+        binder: t.Callable[[BinaryConsumer, BindingOptions], t.AsyncContextManager[BoundConsumer]],
+        wrapper: t.Callable[[Consumer[U, V]], BinaryConsumer],
         exchange: ExchangeOptions | None = None,
         queue: QueueOptions | None = None,
     ) -> None:
@@ -117,10 +120,10 @@ class ConsumerBuilder[U, V]:
         self.__queue = queue
 
     def set_exchange(self, exchange: ExchangeOptions | None) -> ConsumerBuilder[U, V]:
-        return ConsumerBuilder(self.__binder, self.__wrapper, exchange, self.__queue)
+        return ConsumerBuilder(self.__binder, self.__wrapper, merge_options(self.__exchange, exchange), self.__queue)
 
     def set_queue(self, queue: QueueOptions | None) -> ConsumerBuilder[U, V]:
-        return ConsumerBuilder(self.__binder, self.__wrapper, self.__exchange, queue)
+        return ConsumerBuilder(self.__binder, self.__wrapper, self.__exchange, merge_options(self.__queue, queue))
 
     @t.overload
     def add_serializer(self, serializer: None) -> ConsumerBuilder[U, V]: ...
@@ -138,7 +141,7 @@ class ConsumerBuilder[U, V]:
         inner_wrapper = self.__wrapper
         load_message = serializer.load_message if isinstance(serializer, Serializer) else serializer
 
-        def wrapper(inner: Consumer[U2, V]) -> RawConsumer:
+        def wrapper(inner: Consumer[U2, V]) -> BinaryConsumer:
             return inner_wrapper(DecodingConsumer(inner, load_message))
 
         return ConsumerBuilder(self.__binder, wrapper, self.__exchange, self.__queue)
@@ -149,7 +152,7 @@ class ConsumerBuilder[U, V]:
     ) -> ConsumerBuilder[U, V]:
         inner_wrapper = self.__wrapper
 
-        def wrapper(inner: Consumer[U, V]) -> RawConsumer:
+        def wrapper(inner: Consumer[U, V]) -> BinaryConsumer:
             return inner_wrapper(ConsumerMiddlewareWrapper(inner, middleware))
 
         return ConsumerBuilder(self.__binder, wrapper, self.__exchange, self.__queue)
@@ -211,14 +214,14 @@ class ConsumerBuilder[U, V]:
                 # t.assert_never(inner)
                 raise TypeError(inner)
 
-        return self.__binder(self.__wrapper(consumer), self.__clear_options(options))
+        return self.__binder(self.__wrapper(consumer), self.__clear_binding_options(options))
 
-    def __clear_options(self, options: BindingOptions) -> BindingOptions:
+    def __clear_binding_options(self, binding: BindingOptions) -> BindingOptions:
         if self.__exchange is None and self.__queue is None:
-            return options
+            return binding
 
         return replace(
-            options,
-            exchange=options.exchange if options.exchange is not None else self.__exchange,
-            queue=options.queue if options.queue is not None else self.__queue,
+            binding,
+            exchange=merge_options(self.__exchange, binding.exchange),
+            queue=merge_options(self.__queue, binding.queue),
         )

@@ -1,11 +1,10 @@
 import typing as t
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import replace
 from datetime import timedelta
 
 from protomq.broker import Broker
-from protomq.options import BindingOptions, ExchangeOptions, QueueOptions
+from protomq.options import BindingOptions, ExchangeOptions, QueueOptions, merge_options
 from protomq.rpc.abc import Caller, CallerSerializer
 from protomq.rpc.caller import RequestCaller
 from protomq.rpc.handler import HandlerResponseConsumer
@@ -54,10 +53,12 @@ class Client:
         return BindingOptions(
             exchange=exchange,
             binding_keys=(response_key,),
-            queue=replace(
-                queue if queue is not None else QueueOptions(),
-                name=response_key,
-                auto_delete=True,
-                exclusive=True,
+            queue=merge_options(
+                queue,
+                QueueOptions(
+                    name=response_key,
+                    auto_delete=True,
+                    exclusive=True,
+                ),
             ),
         )

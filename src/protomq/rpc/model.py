@@ -1,12 +1,30 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from protomq.model import Message
+from protomq.message import Message, PackedMessage, UnpackedMessage
+from protomq.model import ProtomqError
 
 type Request[T] = Message[T]
+type BinaryRequest = Message[bytes]
+type PackedRequest[T] = PackedMessage[T]
+type UnpackedRequest[T] = UnpackedMessage[T]
+
+type Response[T] = Message[T]
+type BinaryResponse = Message[bytes]
+type PackedResponse[T] = PackedMessage[T]
+type UnpackedResponse[T] = UnpackedMessage[T]
 
 
-@dataclass(frozen=True, kw_only=True)
-class Response[U, V](Message[V]):
-    to_request: U
+class ServerError(ProtomqError):
+    pass
+
+
+class HandlerError(ServerError):
+    pass
+
+
+class ClientError(ProtomqError):
+    pass
+
+
+class CallerError(ClientError):
+    pass

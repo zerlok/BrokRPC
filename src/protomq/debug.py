@@ -1,7 +1,8 @@
 import os
+import typing as t
 
-_verbosity = int(os.getenv("PROTOMQ_VERBOSITY", "0"))
+__DEBUG: t.Final = os.getenv("PROTOMQ_DEBUG", "0").strip().lower() in {"1", "yes", "true"}
 
 
-def get_verbosity_level() -> int:
-    return _verbosity
+def is_debug_enabled() -> bool:
+    return __DEBUG
