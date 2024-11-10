@@ -19,6 +19,8 @@ class WaiterStorage[T]:
                 if not fut.done():
                     fut.cancel()
 
+            waiters.clear()
+
     def __init__(self, waiters: dict[uuid.UUID, asyncio.Future[T]]) -> None:
         self.__waiters = waiters
 
@@ -36,13 +38,20 @@ class WaiterStorage[T]:
 
             self.__waiters.pop(key, None)
 
+    def set_waiter(self, key: str, value: T | Exception) -> None:
+        if isinstance(value, Exception):
+            self.set_exception(key, value)
+
+        else:
+            self.set_result(key, value)
+
     def set_result(self, key: str, value: T) -> None:
         self.__waiters[uuid.UUID(hex=key)].set_result(value)
 
     def set_exception(self, key: str, value: Exception) -> None:
         self.__waiters[uuid.UUID(hex=key)].set_exception(value)
 
-    def set_cancel(self, key: str, reason: str | None) -> None:
+    def cancel(self, key: str, reason: str | None) -> None:
         self.__waiters[uuid.UUID(hex=key)].cancel(reason)
 
 

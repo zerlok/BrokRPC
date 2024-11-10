@@ -4,17 +4,19 @@ import asyncio
 import typing as t
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from aiormq import Channel, Connection, ProtocolSyntaxError, spec
 from pamqp.common import FieldTable
 
+from protomq.retry import Retryer
+
 if t.TYPE_CHECKING:
     from aiormq.abc import DeliveredMessage
 
 from protomq.abc import BoundConsumer, Driver, Publisher, RawConsumer, RawPublisher
-from protomq.message import (
+from protomq.model import (
     ConsumerAck,
     ConsumerReject,
     ConsumerResult,
@@ -25,11 +27,11 @@ from protomq.message import (
 )
 from protomq.options import (
     BindingOptions,
-    ChannelOptions,
-    ConnectOptions,
+    BrokerOptions,
     ExchangeOptions,
     PublisherOptions,
     QueueOptions,
+    QOSOptions,
 )
 
 
@@ -66,7 +68,7 @@ class AiormqPublisher(Publisher[RawMessage, PublisherResult]):
                 priority=message.priority,
                 correlation_id=message.correlation_id,
                 reply_to=message.reply_to,
-                expiration=message.expiration,
+                expiration=_dump_message_timeout(message.timeout),
                 message_id=message.message_id if message.message_id is not None else self.__message_id_gen(),
                 timestamp=message.timestamp if message.timestamp is not None else self.__now(),
                 message_type=message.message_type,
@@ -115,7 +117,7 @@ class AiormqConsumerCallback:
             priority=message.header.properties.priority,
             correlation_id=message.header.properties.correlation_id,
             reply_to=message.header.properties.reply_to,
-            expiration=message.header.properties.expiration,
+            timeout=_load_message_timeout(message.header.properties.expiration),
             message_id=message.header.properties.message_id,
             timestamp=message.header.properties.timestamp,
             message_type=message.header.properties.message_type,
@@ -168,15 +170,18 @@ class AiormqBoundConsumer(BoundConsumer):
 class AiormqDriver(Driver):
     @classmethod
     @asynccontextmanager
-    async def connect(cls, options: ConnectOptions) -> t.AsyncIterator[AiormqDriver]:
+    async def connect(cls, options: BrokerOptions) -> t.AsyncIterator[AiormqDriver]:
         conn = Connection(options.url)
 
-        err = await cls.__try_connect(conn, options.max_attempts, options.attempt_delay.total_seconds())
-        if err is not None:
-            details = "can't connect to rabbitmq"
-            raise ConnectionError(details, options.url) from err
-
         try:
+            await (
+                Retryer(options)
+                .bind(
+                    retry_on_exceptions=(ConnectionError, ProtocolSyntaxError),
+                    no_more_attempts_message="can't connect to rabbitmq",
+                )
+                .do(conn.connect)
+            )
             yield cls(conn)
 
         finally:
@@ -231,7 +236,7 @@ class AiormqDriver(Driver):
         return last_error
 
     @asynccontextmanager
-    async def __provide_channel(self, options: ChannelOptions | None) -> t.AsyncIterator[Channel]:
+    async def __provide_channel(self, options: QOSOptions | None) -> t.AsyncIterator[Channel]:
         channel = await self.__connection.channel()
         assert isinstance(channel, Channel)
 
@@ -325,3 +330,11 @@ class AiormqDriver(Driver):
 
     def __get_now(self) -> datetime:
         return datetime.now(tz=timezone.utc)
+
+
+def _load_message_timeout(value: str | None) -> timedelta | None:
+    return timedelta(milliseconds=float(value)) if value else None
+
+
+def _dump_message_timeout(value: timedelta | None) -> str | None:
+    return f"{value.total_seconds() * 1000:.0f}" if value is not None else None

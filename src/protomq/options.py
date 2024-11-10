@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 
 from yarl import URL
 
+from protomq.retry import RetryOptions
+
 
 class DecoratorOptions:
     @classmethod
@@ -25,39 +27,23 @@ type ExchangeType = t.Literal["direct", "fanout", "topic", "headers"]
 
 
 @dataclass(frozen=True, kw_only=True)
-class ConnectOptions:
+class BrokerOptions(RetryOptions):
     driver: str
     url: URL
-    max_attempts: int = 10
-    attempt_delay: timedelta = timedelta(seconds=3.0)
-
-    def __post_init__(self) -> None:
-        if self.max_attempts <= 0:
-            details = "max attempts must be greater than 0"
-            raise ValueError(details, self.max_attempts)
-
-        if self.attempt_delay.total_seconds() < 0.0:
-            details = "attempt delay must be greater than or equal to 0"
-            raise ValueError(details, self.attempt_delay)
-
-    def __str__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"""driver="{self.driver}", """
-            f"""url="{self.url.with_password("******")}", """
-            f"max_attempts={self.max_attempts}, "
-            f"attempt_delay={self.attempt_delay!r}"
-            f")"
-        )
 
 
 @dataclass(frozen=True, kw_only=True)
-class ChannelOptions:
+class QOSOptions:
     prefetch_count: int | None = None
 
+    def __post_init__(self) -> None:
+        if self.prefetch_count is not None and self.prefetch_count < 0:
+            details = "prefetch count must be greater than or equal to 0"
+            raise ValueError(details, self)
+
 
 @dataclass(frozen=True, kw_only=True)
-class ExchangeOptions(ChannelOptions):
+class ExchangeOptions(QOSOptions):
     name: str | None = None
     type: ExchangeType | None = None
     durable: bool | None = None
@@ -66,7 +52,7 @@ class ExchangeOptions(ChannelOptions):
 
 
 @dataclass(frozen=True, kw_only=True)
-class QueueOptions(ChannelOptions):
+class QueueOptions(QOSOptions):
     name: str | None = None
     durable: bool | None = None
     exclusive: bool | None = None
@@ -80,12 +66,15 @@ class BindingOptions:
     binding_keys: t.Sequence[str]
     queue: QueueOptions | None = None
 
+    def __post_init__(self) -> None:
+        if not self.binding_keys:
+            details = "at least one binding key must be set"
+            raise ValueError(details, self)
+
 
 @dataclass(frozen=True, kw_only=True)
-class ConsumerOptions(QueueOptions, DecoratorOptions):
+class ConsumerOptions(QueueOptions, RetryOptions, DecoratorOptions):
     retry_on_error: bool | type[Exception] | tuple[type[Exception], ...] | None = None
-    retry_delay: float | timedelta | None = None
-    max_retries: int | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -95,7 +84,7 @@ class PublisherOptions(ExchangeOptions):
 
 @dataclass(frozen=True, kw_only=True)
 class MessageOptions:
-    routing_key: str
+    # routing_key: str | None = None
     exchange: str | None = None
     content_type: str | None = None
     content_encoding: str | None = None
@@ -104,7 +93,7 @@ class MessageOptions:
     priority: int | None = None
     correlation_id: str | None = None
     reply_to: str | None = None
-    expiration: str | None = None
+    timeout: timedelta | None = None
     message_id: str | None = None
     timestamp: datetime | None = None
     message_type: str | None = None

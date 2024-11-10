@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import typing as t
 from concurrent.futures import Executor
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import AsyncExitStack
 from functools import partial
 
 from yarl import URL
@@ -19,16 +19,16 @@ from protomq.abc import (
     Serializer,
 )
 from protomq.builder import ConsumerBuilder, PublisherBuilder, ident
-from protomq.message import ConsumerResult, PublisherResult, RawMessage
-from protomq.options import BindingOptions, ConnectOptions, ExchangeOptions, PublisherOptions, QueueOptions
+from protomq.model import ConsumerResult, PublisherResult, RawMessage
+from protomq.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
 
-type DSNOrConnectOptions = str | URL | ConnectOptions
+type DSNOrBrokerOptions = str | URL | BrokerOptions
 
 
-class Connection(t.AsyncContextManager["Connection"]):
+class Broker(t.AsyncContextManager["Broker"]):
     def __init__(
         self,
-        dsn: DSNOrConnectOptions,
+        dsn: DSNOrBrokerOptions,
         default_exchange: ExchangeOptions | None = None,
         default_queue: QueueOptions | None = None,
         default_publisher_middlewares: t.Sequence[PublisherMiddleware[RawPublisher, RawMessage, PublisherResult]]
@@ -51,15 +51,15 @@ class Connection(t.AsyncContextManager["Connection"]):
         self.__opened = asyncio.Event()
         self.__driver: Driver | None = None
 
-    async def __aenter__(self) -> Connection:
-        await self.open()
+    async def __aenter__(self) -> Broker:
+        await self.connect()
         return self
 
     async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> bool | None:
-        await self.close()
+        await self.disconnect()
         return None
 
-    async def open(self) -> None:
+    async def connect(self) -> None:
         if self.__driver is not None:
             return
 
@@ -67,12 +67,12 @@ class Connection(t.AsyncContextManager["Connection"]):
             if self.__driver is not None:
                 return
 
-            assert not self.is_open
+            assert not self.is_connected
             self.__driver = await self.__stack.enter_async_context(self.__connect())
             self.__opened.set()
-            assert self.is_open
+            assert self.is_connected
 
-    async def close(self) -> None:
+    async def disconnect(self) -> None:
         if self.__driver is None:
             return
 
@@ -80,27 +80,27 @@ class Connection(t.AsyncContextManager["Connection"]):
             if self.__driver is None:
                 return
 
-            assert self.is_open
+            assert self.is_connected
             try:
                 await self.__stack.aclose()
 
             finally:
                 self.__driver = None
                 self.__opened.clear()
-                assert not self.is_open
+                assert not self.is_connected
 
     @property
-    def is_open(self) -> bool:
+    def is_connected(self) -> bool:
         return self.__driver is not None and self.__opened.is_set()
 
     @property
     def driver(self) -> Driver:
         if self.__driver is None:
-            assert not self.is_open
+            assert not self.is_connected
             details = "connection is not open"
             raise RuntimeError(details, self)
 
-        assert self.is_open
+        assert self.is_connected
         return self.__driver
 
     @t.overload
@@ -114,16 +114,16 @@ class Connection(t.AsyncContextManager["Connection"]):
         self,
         options: PublisherOptions | None = None,
         *,
-        serializer: Serializer[T, RawMessage],
+        serializer: t.Callable[[T], RawMessage] | Serializer[T, RawMessage],
     ) -> t.AsyncContextManager[Publisher[T, PublisherResult]]: ...
 
     def publisher[T](
         self,
         options: PublisherOptions | None = None,
         *,
-        serializer: Serializer[T, RawMessage] | None = None,
+        serializer: t.Callable[[T], RawMessage] | Serializer[T, RawMessage] | None = None,
     ) -> t.AsyncContextManager[RawPublisher] | t.AsyncContextManager[Publisher[T, PublisherResult]]:
-        return self.publisher_builder().add_serializer(serializer).build(options)
+        return self.builder_publisher().add_serializer(serializer).build(options)
 
     @t.overload
     def consumer[T](
@@ -154,7 +154,7 @@ class Connection(t.AsyncContextManager["Connection"]):
         consumer: t.Callable[[T], t.Awaitable[ConsumerResult]],
         options: BindingOptions,
         *,
-        serializer: Serializer[T, RawMessage],
+        serializer: t.Callable[[RawMessage], T] | Serializer[T, RawMessage],
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
     @t.overload
@@ -163,7 +163,7 @@ class Connection(t.AsyncContextManager["Connection"]):
         consumer: t.Callable[[T], ConsumerResult],
         options: BindingOptions,
         *,
-        serializer: Serializer[T, RawMessage],
+        serializer: t.Callable[[RawMessage], T] | Serializer[T, RawMessage],
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
@@ -175,24 +175,24 @@ class Connection(t.AsyncContextManager["Connection"]):
         | t.Callable[[T], t.Awaitable[ConsumerResult]]
         | t.Callable[[T], ConsumerResult],
         options: BindingOptions,
-        serializer: Serializer[T, RawMessage] | None = None,
+        serializer: t.Callable[[RawMessage], T] | Serializer[T, RawMessage] | None = None,
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]:
         return (
-            self.consumer_builder()
+            self.build_consumer()
             .add_serializer(serializer)
             # TODO: remove cast to any
             .build(t.cast(t.Any, consumer), options, executor=executor)
         )
 
-    def publisher_builder(self) -> PublisherBuilder[RawMessage, PublisherResult]:
+    def builder_publisher(self) -> PublisherBuilder[RawMessage, PublisherResult]:
         return (
             PublisherBuilder(self.__provide_publisher, ident)
             .set_exchange(self.__default_exchange)
             .add_middlewares(*self.__default_publisher_middlewares)
         )
 
-    def consumer_builder(self) -> ConsumerBuilder[RawMessage, ConsumerResult]:
+    def build_consumer(self) -> ConsumerBuilder[RawMessage, ConsumerResult]:
         return (
             ConsumerBuilder(self.__bind_consumer, ident)
             .set_exchange(self.__default_exchange)
@@ -200,23 +200,15 @@ class Connection(t.AsyncContextManager["Connection"]):
             .add_middlewares(*self.__default_consumer_middlewares)
         )
 
-    @asynccontextmanager
-    async def __provide_publisher(self, options: PublisherOptions | None) -> t.AsyncIterator[RawPublisher]:
-        await self.__opened.wait()
-        assert self.is_open
-        async with self.driver.provide_publisher(options) as publisher:
-            yield publisher
+    def __provide_publisher(self, options: PublisherOptions | None) -> t.AsyncContextManager[RawPublisher]:
+        return self.driver.provide_publisher(options)
 
-    @asynccontextmanager
-    async def __bind_consumer(self, consumer: RawConsumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
-        await self.__opened.wait()
-        assert self.is_open
-        async with self.driver.bind_consumer(consumer, options) as bound_consumer:
-            yield bound_consumer
+    def __bind_consumer(self, consumer: RawConsumer, options: BindingOptions) -> t.AsyncContextManager[BoundConsumer]:
+        return self.driver.bind_consumer(consumer, options)
 
 
-def connect(options: DSNOrConnectOptions) -> t.AsyncContextManager[Driver]:
-    clean_options = options if isinstance(options, ConnectOptions) else parse_dsn(options)
+def connect(options: DSNOrBrokerOptions) -> t.AsyncContextManager[Driver]:
+    clean_options = options if isinstance(options, BrokerOptions) else parse_dsn(options)
 
     if clean_options.driver == "aiormq":
         from protomq.driver.aiormq import AiormqDriver
@@ -228,7 +220,7 @@ def connect(options: DSNOrConnectOptions) -> t.AsyncContextManager[Driver]:
         raise ValueError(details, clean_options)
 
 
-def parse_dsn(dsn: str | URL) -> ConnectOptions:
+def parse_dsn(dsn: str | URL) -> BrokerOptions:
     clean_dsn = URL(dsn) if isinstance(dsn, str) else dsn
 
     parts = clean_dsn.scheme.split("+", maxsplit=1)
@@ -238,4 +230,4 @@ def parse_dsn(dsn: str | URL) -> ConnectOptions:
     else:
         scheme, driver = parts[0], "aiormq"
 
-    return ConnectOptions(driver=driver, url=clean_dsn.with_scheme(scheme))
+    return BrokerOptions(driver=driver, url=clean_dsn.with_scheme(scheme))

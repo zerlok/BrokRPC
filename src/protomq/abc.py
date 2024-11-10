@@ -1,7 +1,7 @@
 import abc
 import typing as t
 
-from protomq.message import ConsumerResult, PublisherResult, RawMessage
+from protomq.model import ConsumerResult, PublisherResult, RawMessage
 from protomq.options import BindingOptions, PublisherOptions
 
 

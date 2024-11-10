@@ -10,35 +10,25 @@ from protomq.options import MessageOptions
 
 @dataclass(frozen=True, kw_only=True)
 class Message[T](MessageOptions):
-    @classmethod
-    def from_options(cls, body: T, options: MessageOptions) -> Message[T]:
-        return cls(body=body, **asdict(options))
-
     body: T
-    # routing_key: str
-    # exchange: str | None = None
-    # content_type: str | None = None
-    # content_encoding: str | None = None
-    # headers: t.Mapping[str, str] | None = None
-    # delivery_mode: int | None = None
-    # priority: int | None = None
-    # correlation_id: str | None = None
-    # reply_to: str | None = None
-    # expiration: str | None = None
-    # message_id: str | None = None
-    # timestamp: datetime | None = None
-    # message_type: str | None = None
-    # user_id: str | None = None
-    # app_id: str | None = None
+    routing_key: str
+    # options: MessageOptions | None = None
 
-    def with_body[V](self, body: V) -> Message[V]:
-        return replace(t.cast(Message[V], self), body=body)
+    def repack[V](self, body: V, options: MessageOptions | None = None) -> Message[V]:
+        return replace(t.cast(Message[V], self), body=body, **(asdict(options) if options is not None else {}))
+
+    #
+    # def unpack[V](self, body: V, options: MessageOptions | None = None) -> Message[V]:
+    #     return UnpackedMessage(t.cast(Message[V], self), body=body, **(asdict(options) if options is not None else {}))
+
+    # def with_options(self, options: MessageOptions) -> Message[T]:
+    #     return replace(self, **asdict(options))
 
     if get_verbosity_level() <= 1:
 
         def __str__(self) -> str:
             return (
-                f"<{self.__class__.__name__} at {hex(id(self))}; id={self.message_id}; "
+                f"<{self.__class__.__name__}[{type(self.body)}] at {hex(id(self))}; id={self.message_id}; "
                 f"exchange={self.exchange}; rk={self.routing_key}>"
             )
 
@@ -51,7 +41,17 @@ class Message[T](MessageOptions):
 type RawMessage = Message[bytes]
 
 
-type PublisherResult = None
+# @dataclass(frozen=True, kw_only=True)
+# class UnpackedMessage[T](Message[T]):
+#     raw: RawMessage
+#
+#
+# @dataclass(frozen=True, kw_only=True)
+# class PackedMessage[T](Message[T]):
+#     pass
+
+
+type PublisherResult = bool | None
 
 
 @dataclass(frozen=True, kw_only=True)

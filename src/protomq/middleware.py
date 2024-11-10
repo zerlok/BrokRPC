@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta
 
 from protomq.abc import Consumer, ConsumerMiddleware, Publisher, PublisherMiddleware
-from protomq.message import ConsumerResult, ConsumerRetry
+from protomq.model import ConsumerResult, ConsumerRetry
 from protomq.options import ConsumerOptions
 
 

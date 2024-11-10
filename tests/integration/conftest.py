@@ -1,7 +1,7 @@
 import typing as t
 
 import pytest
-from protomq.connection import Connection
+from protomq.broker import Broker
 
 
 @pytest.fixture()
@@ -10,6 +10,6 @@ def rabbitmq_url() -> str:
 
 
 @pytest.fixture()
-async def rabbitmq_connection(rabbitmq_url: str) -> t.AsyncIterator[Connection]:
-    async with Connection(rabbitmq_url) as conn:
+async def rabbitmq_connection(rabbitmq_url: str) -> t.AsyncIterator[Broker]:
+    async with Broker(rabbitmq_url) as conn:
         yield conn

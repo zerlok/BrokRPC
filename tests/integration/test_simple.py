@@ -3,8 +3,8 @@ import typing as t
 
 import pytest
 from protomq.abc import RawPublisher
-from protomq.connection import Connection
-from protomq.message import Message, RawMessage
+from protomq.broker import Broker
+from protomq.model import Message, RawMessage
 from protomq.options import BindingOptions, PublisherOptions
 
 from tests.stub.simple import SimpleConsumer
@@ -23,7 +23,7 @@ async def test_simple_consumer_receives_message(
 
 @pytest.fixture()
 async def consumer(
-    rabbitmq_connection: Connection,
+    rabbitmq_connection: Broker,
     binding_options: BindingOptions,
 ) -> t.AsyncIterator[SimpleConsumer]:
     consumer = SimpleConsumer()
@@ -34,7 +34,7 @@ async def consumer(
 
 @pytest.fixture()
 async def publisher(
-    rabbitmq_connection: Connection,
+    rabbitmq_connection: Broker,
     publisher_options: PublisherOptions,
 ) -> t.AsyncIterator[RawPublisher]:
     async with rabbitmq_connection.publisher(publisher_options) as pub:

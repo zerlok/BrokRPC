@@ -1,7 +1,7 @@
 import asyncio
 
 from protomq.abc import Consumer
-from protomq.message import ConsumerResult, RawMessage
+from protomq.model import ConsumerResult, RawMessage
 
 
 class SimpleConsumer(Consumer[RawMessage, ConsumerResult]):
