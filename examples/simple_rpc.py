@@ -6,14 +6,13 @@ from protomq.broker import Broker
 from protomq.middleware import RetryOnErrorConsumerMiddleware
 from protomq.options import ExchangeOptions
 from protomq.rpc.client import Client
-from protomq.rpc.model import Request
 from protomq.rpc.server import Server
 from protomq.serializer.json import JSONSerializer
 
 
 # define app RPC handler
-async def handle_request(msg: Request[object]) -> str:
-    return f"I greet you, {msg.body}"
+async def handle_request(msg: object) -> str:
+    return f"I greet you, {msg}"
 
 
 async def main() -> None:

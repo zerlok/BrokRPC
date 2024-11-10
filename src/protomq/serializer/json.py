@@ -38,6 +38,22 @@ class JSONSerializer(Serializer[Message[object], RawMessage], RPCSerializer[obje
         )
 
     def load_message(self, message: RawMessage) -> Message[object]:
+        obj = self.__load(message)
+        return message.repack(obj)
+
+    def dump_unary_request(self, request: Request[object]) -> Request[bytes]:
+        return self.dump_message(request)
+
+    def load_unary_request(self, request: Request[bytes]) -> object:
+        return self.__load(request)
+
+    def dump_unary_response(self, response: Response[object, object]) -> RawMessage:
+        return self.dump_message(response)
+
+    def load_unary_response(self, response: RawMessage) -> object:
+        return self.__load(response)
+
+    def __load(self, message: RawMessage) -> object:
         if message.content_type != self.__CONTENT_TYPE:
             details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)
@@ -58,16 +74,4 @@ class JSONSerializer(Serializer[Message[object], RawMessage], RPCSerializer[obje
             details = f"can't decode json message: {err}"
             raise SerializerLoadError(details, message) from err
 
-        return message.repack(obj)
-
-    def dump_unary_request(self, request: Request[object]) -> Request[bytes]:
-        return self.dump_message(request)
-
-    def load_unary_request(self, request: Request[bytes]) -> Request[object]:
-        return self.load_message(request)
-
-    def dump_unary_response(self, response: Response[object, object]) -> RawMessage:
-        return self.dump_message(response)
-
-    def load_unary_response(self, response: RawMessage) -> Message[object]:
-        return self.load_message(response)
+        return obj
