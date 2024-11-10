@@ -4,46 +4,36 @@ import typing as t
 from protomq.model import RawMessage
 from protomq.rpc.model import Request, Response
 
-U_contra = t.TypeVar("U_contra", contravariant=True)
-V_co = t.TypeVar("V_co", covariant=True)
+type UnaryUnaryFunc[U, V] = t.Callable[[U], t.Awaitable[V]]
+type UnaryStreamFunc[U, V] = t.Callable[[U], t.AsyncIterable[V]]
+type StreamUnaryFunc[U, V] = t.Callable[[t.AsyncIterator[U]], t.Awaitable[V]]
+type StreamStreamFunc[U, V] = t.Callable[[t.AsyncIterator[U]], t.AsyncIterable[V]]
+type HandlerFunc[U, V] = UnaryUnaryFunc[U, V] | UnaryStreamFunc[U, V] | StreamUnaryFunc[U, V] | StreamStreamFunc[U, V]
 
 
-type UnaryUnaryFunc[U_contra, V_co] = t.Callable[[U_contra], t.Awaitable[V_co]]
-type UnaryStreamFunc[U_contra, V_co] = t.Callable[[U_contra], t.AsyncIterable[V_co]]
-type StreamUnaryFunc[U_contra, V_co] = t.Callable[[t.AsyncIterator[U_contra]], t.Awaitable[V_co]]
-type StreamStreamFunc[U_contra, V_co] = t.Callable[[t.AsyncIterator[U_contra]], t.AsyncIterable[V_co]]
-
-type HandlerFunc[U_contra, V_co] = (
-    UnaryUnaryFunc[U_contra, V_co]
-    | UnaryStreamFunc[U_contra, V_co]
-    | StreamUnaryFunc[U_contra, V_co]
-    | StreamStreamFunc[U_contra, V_co]
-)
-
-
-class Caller(t.Generic[U_contra, V_co], metaclass=abc.ABCMeta):
+class Caller[U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    async def invoke(self, request: U_contra) -> V_co:
+    async def invoke(self, request: U) -> V:
         raise NotImplementedError
 
 
-class HandlerSerializer(t.Generic[U_contra, V_co], metaclass=abc.ABCMeta):
+class HandlerSerializer[U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def load_unary_request(self, request: Request[bytes]) -> U_contra:
+    def load_unary_request(self, request: Request[bytes]) -> U:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def dump_unary_response(self, response: Response[U_contra, V_co]) -> RawMessage:
+    def dump_unary_response(self, response: Response[U, V]) -> RawMessage:
         raise NotImplementedError
 
 
-class CallerSerializer(t.Generic[U_contra, V_co], metaclass=abc.ABCMeta):
+class CallerSerializer[U, V](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def dump_unary_request(self, request: Request[U_contra]) -> Request[bytes]:
+    def dump_unary_request(self, request: Request[U]) -> Request[bytes]:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def load_unary_response(self, response: RawMessage) -> V_co:
+    def load_unary_response(self, response: RawMessage) -> V:
         raise NotImplementedError
 
 

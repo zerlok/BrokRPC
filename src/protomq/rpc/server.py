@@ -14,9 +14,6 @@ from protomq.options import BindingOptions, ExchangeOptions, QueueOptions
 from protomq.rpc.abc import HandlerFunc, HandlerSerializer, UnaryUnaryFunc
 from protomq.rpc.handler import AsyncFuncHandler
 
-U_contra = t.TypeVar("U_contra", contravariant=True)
-V_co = t.TypeVar("V_co", covariant=True)
-
 
 class Server:
     def __init__(self, broker: Broker) -> None:
@@ -34,11 +31,11 @@ class Server:
     def is_running(self) -> bool:
         return len(self.__bound_consumers) > 0
 
-    def register_unary_unary_handler[U_contra, V_co](
+    def register_unary_unary_handler[U, V](
         self,
-        func: UnaryUnaryFunc[U_contra, V_co],
+        func: UnaryUnaryFunc[U, V],
         routing_key: str,
-        serializer: HandlerSerializer[U_contra, V_co],
+        serializer: HandlerSerializer[U, V],
         exchange: ExchangeOptions | None = None,
         queue: QueueOptions | None = None,
     ) -> None:

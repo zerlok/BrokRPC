@@ -30,8 +30,8 @@ from protomq.options import (
     BrokerOptions,
     ExchangeOptions,
     PublisherOptions,
-    QueueOptions,
     QOSOptions,
+    QueueOptions,
 )
 
 
@@ -92,6 +92,7 @@ class AiormqConsumerCallback:
         result = await self.__inner.consume(message)
         await self.__handle_result(aiormq_message, result)
 
+        # TODO: check how aiormq handles exception
         # try:
         #
         # except Exception as err:
@@ -217,23 +218,6 @@ class AiormqDriver(Driver):
 
             finally:
                 await channel.basic_cancel(consume_ok.consumer_tag)
-
-    @classmethod
-    async def __try_connect(cls, conn: Connection, max_attempts: int, attempt_delay: float) -> Exception | None:
-        last_error: Exception | None = None
-
-        for i in range(max_attempts):
-            try:
-                await conn.connect()
-            # NOTE: Need to retry connection with several attempts.
-            except (ConnectionError, ProtocolSyntaxError) as err:  # noqa: PERF203
-                last_error = err
-                if i + 1 < max_attempts:
-                    await asyncio.sleep(attempt_delay)
-            else:
-                return None
-
-        return last_error
 
     @asynccontextmanager
     async def __provide_channel(self, options: QOSOptions | None) -> t.AsyncIterator[Channel]:
