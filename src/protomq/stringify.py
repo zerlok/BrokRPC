@@ -17,6 +17,5 @@ def to_str_type(
     type_: type[object],
     type_vars: t.Sequence[type[object]] | None = None,
 ) -> str:
-    return (
-        f"{type_.__name__}" if not type_vars else f"""{type_.__name__}[{", ".join(tv.__name__ for tv in type_vars)}]"""
-    )
+    value = f"{type_.__module__}.{type_.__name__}"
+    return value if not type_vars else f"""{value}[{", ".join(tv.__name__ for tv in type_vars)}]"""

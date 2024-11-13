@@ -23,7 +23,7 @@ async def main() -> None:
     async with (
         # create a connection to broker
         Broker(
-            dsn="amqp://guest:guest@localhost:5672/",
+            options="amqp://guest:guest@localhost:5672/",
             default_exchange=ExchangeOptions(name="simple-test-app"),
             default_consumer_middlewares=[RetryOnErrorConsumerMiddleware((Exception,), timedelta(seconds=3.0))],
         ) as broker,

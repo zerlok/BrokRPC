@@ -16,6 +16,9 @@ class DecodingConsumer[A, V, B](Consumer[A, V]):
     def __str__(self) -> str:
         return to_str_obj(self, inner=self.__inner)
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(inner={self.__inner!r}, decoder={self.__decoder!r})"
+
     async def consume(self, message: A) -> V:
         decoded_message = self.__decoder(message)
         result = await self.__inner.consume(decoded_message)
@@ -30,6 +33,9 @@ class EncodingConsumer[U, A, B](Consumer[U, A]):
 
     def __str__(self) -> str:
         return to_str_obj(self, inner=self.__inner)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(inner={self.__inner!r}, encode={self.__encode!r})"
 
     async def consume(self, message: U) -> A:
         result = await self.__inner.consume(message)
@@ -46,6 +52,9 @@ class SyncFuncConsumer[U, V](Consumer[U, V]):
     def __str__(self) -> str:
         return to_str_obj(self, inner=self.__func)
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(func={self.__func!r}, executor={self.__executor!r})"
+
     async def consume(self, message: U) -> V:
         result = await asyncio.get_running_loop().run_in_executor(self.__executor, self.__func, message)
 
@@ -58,6 +67,9 @@ class AsyncFuncConsumer[U, V](Consumer[U, V]):
 
     def __str__(self) -> str:
         return to_str_obj(self, inner=self.__func)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(func={self.__func!r})"
 
     async def consume(self, message: U) -> V:
         result = await self.__func(message)

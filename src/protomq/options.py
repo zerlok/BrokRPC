@@ -71,6 +71,13 @@ class BindingOptions:
     queue: QueueOptions | None = None
 
     def __post_init__(self) -> None:
+        if isinstance(self.binding_keys, str):
+            details = (
+                "a string (a sequence of chars) can't be used as a list of binding keys, it's a possible typo in "
+                "the code (missed comma in tuple), try to provide a sequence of binding keys explicitly"
+            )
+            raise ValueError(details, list(self.binding_keys))
+
         if not self.binding_keys:
             details = "at least one binding key must be set"
             raise ValueError(details, self)

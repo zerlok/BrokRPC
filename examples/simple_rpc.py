@@ -24,7 +24,7 @@ async def main() -> None:
 
     # create broker, RPC server & RPC client
     broker = Broker(
-        dsn="amqp://guest:guest@localhost:5672/",
+        options="amqp://guest:guest@localhost:5672/",
         default_exchange=ExchangeOptions(name="simple-test-app"),
         default_consumer_middlewares=[RetryOnErrorConsumerMiddleware((Exception,), timedelta(seconds=3.0))],
     )

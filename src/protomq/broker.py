@@ -13,6 +13,7 @@ from protomq.abc import (
     BinaryPublisher,
     BoundConsumer,
     BrokerDriver,
+    Consumer,
     ConsumerMiddleware,
     Publisher,
     PublisherMiddleware,
@@ -20,17 +21,21 @@ from protomq.abc import (
 )
 from protomq.builder import ConsumerBuilder, PublisherBuilder, ident
 from protomq.message import BinaryMessage
-from protomq.model import ConsumerResult, PublisherResult
+from protomq.model import BrokerError, ConsumerResult, PublisherResult
 from protomq.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
 from protomq.stringify import to_str_obj
 
-type DSNOrBrokerOptions = str | URL | BrokerOptions
+type BrokerConnectOptions = str | URL | t.AsyncContextManager[BrokerDriver] | BrokerOptions
+
+
+class BrokerNotConnectedError(BrokerError):
+    pass
 
 
 class Broker(t.AsyncContextManager["Broker"]):
     def __init__(
         self,
-        dsn: DSNOrBrokerOptions,
+        options: BrokerConnectOptions,
         default_exchange: ExchangeOptions | None = None,
         default_queue: QueueOptions | None = None,
         default_publisher_middlewares: t.Sequence[PublisherMiddleware[BinaryPublisher, BinaryMessage, PublisherResult]]
@@ -38,7 +43,8 @@ class Broker(t.AsyncContextManager["Broker"]):
         default_consumer_middlewares: t.Sequence[ConsumerMiddleware[BinaryConsumer, BinaryMessage, ConsumerResult]]
         | None = None,
     ) -> None:
-        self.__connect: t.Callable[[], t.AsyncContextManager[BrokerDriver]] = partial(connect, dsn)
+        self.__options = options
+        self.__connect: t.Callable[[], t.AsyncContextManager[BrokerDriver]] = partial(connect, options)
         self.__default_exchange = default_exchange
         self.__default_queue = default_queue
         self.__default_publisher_middlewares: t.Sequence[
@@ -55,6 +61,17 @@ class Broker(t.AsyncContextManager["Broker"]):
 
     def __str__(self) -> str:
         return to_str_obj(self, is_connected=self.is_connected, driver=self.__driver)
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"options={self.__options!r}, "
+            f"default_exchange={self.__default_exchange!r}, "
+            f"default_queue={self.__default_queue!r}, "
+            f"default_publisher_middlewares={self.__default_publisher_middlewares!r}, "
+            f"default_consumer_middlewares={self.__default_consumer_middlewares!r}"
+            ")"
+        )
 
     async def __aenter__(self) -> Broker:
         await self.connect()
@@ -97,16 +114,6 @@ class Broker(t.AsyncContextManager["Broker"]):
     @property
     def is_connected(self) -> bool:
         return self.__driver is not None and self.__opened.is_set()
-
-    @property
-    def driver(self) -> BrokerDriver:
-        if self.__driver is None:
-            assert not self.is_connected
-            details = "connection is not open"
-            raise RuntimeError(details, self)
-
-        assert self.is_connected
-        return self.__driver
 
     @t.overload
     def publisher[T](
@@ -156,6 +163,15 @@ class Broker(t.AsyncContextManager["Broker"]):
     @t.overload
     def consumer[T](
         self,
+        consumer: Consumer[T, ConsumerResult],
+        options: BindingOptions,
+        *,
+        serializer: t.Callable[[BinaryMessage], T] | Serializer[T, BinaryMessage],
+    ) -> t.AsyncContextManager[BoundConsumer]: ...
+
+    @t.overload
+    def consumer[T](
+        self,
         consumer: t.Callable[[T], t.Awaitable[ConsumerResult]],
         options: BindingOptions,
         *,
@@ -177,6 +193,7 @@ class Broker(t.AsyncContextManager["Broker"]):
         consumer: BinaryConsumer
         | t.Callable[[BinaryMessage], t.Awaitable[ConsumerResult]]
         | t.Callable[[BinaryMessage], ConsumerResult]
+        | Consumer[T, ConsumerResult]
         | t.Callable[[T], t.Awaitable[ConsumerResult]]
         | t.Callable[[T], ConsumerResult],
         options: BindingOptions,
@@ -205,17 +222,28 @@ class Broker(t.AsyncContextManager["Broker"]):
             .add_middlewares(*self.__default_consumer_middlewares)
         )
 
+    def __get_driver(self) -> BrokerDriver:
+        if self.__driver is None:
+            assert not self.is_connected
+            raise BrokerNotConnectedError(self)
+
+        assert self.is_connected
+        return self.__driver
+
     def __provide_publisher(self, options: PublisherOptions | None) -> t.AsyncContextManager[BinaryPublisher]:
-        return self.driver.provide_publisher(options)
+        return self.__get_driver().provide_publisher(options)
 
     def __bind_consumer(
         self, consumer: BinaryConsumer, options: BindingOptions
     ) -> t.AsyncContextManager[BoundConsumer]:
-        return self.driver.bind_consumer(consumer, options)
+        return self.__get_driver().bind_consumer(consumer, options)
 
 
-def connect(options: DSNOrBrokerOptions) -> t.AsyncContextManager[BrokerDriver]:
-    clean_options = options if isinstance(options, BrokerOptions) else parse_dsn(options)
+def connect(options: BrokerConnectOptions) -> t.AsyncContextManager[BrokerDriver]:
+    if isinstance(options, t.AsyncContextManager):
+        return options
+
+    clean_options = options if isinstance(options, BrokerOptions) else parse_options(options)
 
     if clean_options.driver == "aiormq":
         from protomq.driver.aiormq import AiormqBrokerDriver
@@ -227,14 +255,14 @@ def connect(options: DSNOrBrokerOptions) -> t.AsyncContextManager[BrokerDriver]:
         raise ValueError(details, clean_options)
 
 
-def parse_dsn(dsn: str | URL) -> BrokerOptions:
-    clean_dsn = URL(dsn) if isinstance(dsn, str) else dsn
+def parse_options(url: str | URL) -> BrokerOptions:
+    clean_url = URL(url) if isinstance(url, str) else url
 
-    parts = clean_dsn.scheme.split("+", maxsplit=1)
+    parts = clean_url.scheme.split("+", maxsplit=1)
     if len(parts) == 2:
         scheme, driver = parts
 
     else:
         scheme, driver = parts[0], "aiormq"
 
-    return BrokerOptions(driver=driver, url=clean_dsn.with_scheme(scheme))
+    return BrokerOptions(driver=driver, url=clean_url.with_scheme(scheme))
