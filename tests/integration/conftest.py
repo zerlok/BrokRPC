@@ -1,55 +1,15 @@
 import typing as t
-from datetime import timedelta
+from dataclasses import replace
 
 import pytest
-
-# FIXME: find a way to import Parser
-# NOTE: fixes strange error `Module "_pytest.config" does not explicitly export attribute "Parser"`.
-from _pytest.config import Parser  # type: ignore[attr-defined]
 from _pytest.fixtures import SubRequest
 from brokrpc.broker import Broker
 from brokrpc.options import BrokerOptions
 from brokrpc.rpc.client import Client
 from brokrpc.rpc.server import Server
 from brokrpc.serializer.json import JSONSerializer
-from yarl import URL
 
-
-def pytest_addoption(parser: Parser) -> None:
-    def parse_seconds(value: str) -> timedelta:
-        return timedelta(seconds=float(value))
-
-    parser.addoption(
-        "--broker-url",
-        type=URL,
-        default=URL("amqp://guest:guest@localhost:5672/"),
-    )
-    parser.addoption(
-        "--broker-retry-delay",
-        type=parse_seconds,
-        default=None,
-    )
-    parser.addoption(
-        "--broker-retry-delay-mode",
-        type=str,
-        choices=["constant", "multiplier", "exponential"],
-        default=None,
-    )
-    parser.addoption(
-        "--broker-retry-max-delay",
-        type=parse_seconds,
-        default=None,
-    )
-    parser.addoption(
-        "--broker-retries-timeout",
-        type=parse_seconds,
-        default=None,
-    )
-    parser.addoption(
-        "--broker-retries-limit",
-        type=int,
-        default=None,
-    )
+from tests.conftest import parse_broker_options
 
 
 @pytest.fixture(
@@ -58,14 +18,9 @@ def pytest_addoption(parser: Parser) -> None:
     ]
 )
 def rabbitmq_options(request: SubRequest) -> BrokerOptions:
-    return BrokerOptions(
-        url=request.config.getoption("broker_url"),
+    return replace(
+        parse_broker_options(request.config),
         driver=request.param,
-        retry_delay=request.config.getoption("broker_retry_delay"),
-        retry_delay_mode=request.config.getoption("broker_retry_delay_mode"),
-        retry_max_delay=request.config.getoption("broker_retry_max_delay"),
-        retries_timeout=request.config.getoption("broker_retries_timeout"),
-        retries_limit=request.config.getoption("broker_retries_limit"),
     )
 
 
