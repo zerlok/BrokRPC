@@ -1,6 +1,6 @@
 import typing as t
 
-from protomq.options import QueueOptions
+from brokrpc.options import QueueOptions
 
 
 def create_queue_options(func: t.Any) -> QueueOptions:

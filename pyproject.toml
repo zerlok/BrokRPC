@@ -1,14 +1,15 @@
 [tool.poetry]
-name = "protomq"
+name = "BrokRPC"
 version = "0.1.0"
 description = ""
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.12"
 protobuf = "^5.26.1"
 aiormq = {version = "^6.8.1"}
+googleapis-common-protos = "^1.65.0"
 
 [tool.poetry.group.dev.dependencies]
 types-protobuf = "^5.26.0.20240422"
@@ -17,6 +18,10 @@ pytest = "^8.2.0"
 pytest-cov = "^5.0.0"
 ruff = "^0.4.9"
 pytest-asyncio = "^0.24.0"
+pyprotostuben = "^0.1.2"
+pytest-timeout = "^2.3.1"
+
+
 
 [build-system]
 requires = ["poetry-core"]
@@ -50,14 +55,23 @@ ignore = [
 
 
 [tool.mypy]
-files = ["src", "tests"]
+files = ["src", "tests", "examples/simple.py", "examples/simple_rpc.py"]
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["google.rpc.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["brokrpc.rpc.protobuf.*", "tests.integration.rpc.*"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 pythonpath = [
     "src",
 ]
 addopts = [
+    "--timeout=60", # 1 minute for each test
     "--cov=src",
     "--cov-report=term-missing",
 ]
@@ -75,5 +89,6 @@ exclude_lines = [
     "pragma: no cover",
     "@abc.abstractmethod",
     "if __name__ == .__main__.:",
+    "if t.TYPE_CHECKING:"
 ]
 show_missing = true

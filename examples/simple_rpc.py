@@ -1,13 +1,13 @@
 import asyncio
 from datetime import timedelta
 
-from protomq.broker import Broker
-from protomq.middleware import RetryOnErrorConsumerMiddleware
-from protomq.options import ExchangeOptions
-from protomq.rpc.client import Client
-from protomq.rpc.model import Request
-from protomq.rpc.server import Server
-from protomq.serializer.json import JSONSerializer
+from brokrpc.broker import Broker
+from brokrpc.middleware import RetryOnErrorConsumerMiddleware
+from brokrpc.options import ExchangeOptions
+from brokrpc.rpc.client import Client
+from brokrpc.rpc.model import Request
+from brokrpc.rpc.server import Server
+from brokrpc.serializer.json import JSONSerializer
 
 
 # define app RPC handler

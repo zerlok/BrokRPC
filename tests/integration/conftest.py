@@ -4,11 +4,11 @@ from datetime import timedelta
 import pytest
 from _pytest.config import Parser
 from _pytest.fixtures import SubRequest
-from protomq.broker import Broker
-from protomq.options import BrokerOptions
-from protomq.rpc.client import Client
-from protomq.rpc.server import Server
-from protomq.serializer.json import JSONSerializer
+from brokrpc.broker import Broker
+from brokrpc.options import BrokerOptions
+from brokrpc.rpc.client import Client
+from brokrpc.rpc.server import Server
+from brokrpc.serializer.json import JSONSerializer
 from yarl import URL
 
 

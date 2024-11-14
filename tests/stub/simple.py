@@ -1,10 +1,10 @@
 import asyncio
 import typing as t
 
-from protomq.abc import Consumer
-from protomq.message import Message
-from protomq.model import ConsumerResult
-from protomq.rpc.model import Request
+from brokrpc.abc import Consumer
+from brokrpc.message import Message
+from brokrpc.model import ConsumerResult
+from brokrpc.rpc.model import Request
 
 type ReceiveWaiterConsumer = (
     Consumer[object, ConsumerResult]

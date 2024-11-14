@@ -3,9 +3,9 @@ import typing as t
 from collections import defaultdict
 from contextlib import asynccontextmanager
 
-from protomq.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, BrokerDriver, Consumer, Publisher
-from protomq.model import ConsumerResult, PublisherResult
-from protomq.options import BindingOptions, PublisherOptions
+from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, BrokerDriver, Consumer, Publisher
+from brokrpc.model import ConsumerResult, PublisherResult
+from brokrpc.options import BindingOptions, PublisherOptions
 
 
 class MessageStorage:

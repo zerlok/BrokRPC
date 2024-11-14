@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package brokrpc.spec.v1;
+
+import "google/protobuf/descriptor.proto";
+
+message ConsumerOptions {
+  /* If specified, consumer will unbind the queue and consume all last messages in the queue. */
+  optional bool fading = 1;
+}
+
+extend google.protobuf.MethodOptions {
+  // TODO: acquire field number for a public extension.
+  optional ConsumerOptions consumer = 9001;
+}

@@ -2,8 +2,8 @@ import typing as t
 from contextlib import nullcontext
 
 import pytest
-from protomq.abc import BrokerDriver
-from protomq.broker import Broker
+from brokrpc.abc import BrokerDriver
+from brokrpc.broker import Broker
 
 from tests.stub.driver import StubBrokerDriver, StubConsumer
 

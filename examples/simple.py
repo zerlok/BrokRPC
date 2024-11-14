@@ -2,11 +2,11 @@ import asyncio
 from datetime import timedelta
 from pprint import pprint
 
-from protomq.broker import Broker
-from protomq.message import AppMessage, Message
-from protomq.middleware import RetryOnErrorConsumerMiddleware
-from protomq.options import BindingOptions, ExchangeOptions, QueueOptions
-from protomq.serializer.json import JSONSerializer
+from brokrpc.broker import Broker
+from brokrpc.message import AppMessage, Message
+from brokrpc.middleware import RetryOnErrorConsumerMiddleware
+from brokrpc.options import BindingOptions, ExchangeOptions, QueueOptions
+from brokrpc.serializer.json import JSONSerializer
 
 
 async def main() -> None:

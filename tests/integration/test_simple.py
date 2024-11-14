@@ -4,13 +4,13 @@ from dataclasses import asdict
 
 import pytest
 from _pytest.fixtures import SubRequest
-from protomq.abc import BinaryPublisher, Publisher, Serializer
-from protomq.broker import Broker
-from protomq.message import AppMessage, Message
-from protomq.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
-from protomq.rpc.abc import Caller, CallerSerializer
-from protomq.rpc.client import Client
-from protomq.rpc.server import Server
+from brokrpc.abc import BinaryPublisher, Publisher, Serializer
+from brokrpc.broker import Broker
+from brokrpc.message import AppMessage, Message
+from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
+from brokrpc.rpc.abc import Caller, CallerSerializer
+from brokrpc.rpc.client import Client
+from brokrpc.rpc.server import Server
 
 from tests.stub.simple import ReceiveWaiter, ReceiveWaiterConsumer, ReceiveWaiterHandler
 
@@ -56,7 +56,8 @@ def receive_waiter_consumer(
     request: SubRequest,
     receive_waiter: ReceiveWaiter,
 ) -> ReceiveWaiterConsumer:
-    return request.param(receive_waiter)
+    factory = t.cast(t.Callable[[ReceiveWaiter], ReceiveWaiterConsumer], request.param)
+    return factory(receive_waiter)
 
 
 @pytest.fixture(
@@ -70,7 +71,8 @@ def receive_waiter_handler(
     request: SubRequest,
     receive_waiter: ReceiveWaiter,
 ) -> ReceiveWaiterHandler:
-    return request.param(receive_waiter)
+    factory = t.cast(t.Callable[[ReceiveWaiter], ReceiveWaiterHandler], request.param)
+    return factory(receive_waiter)
 
 
 @pytest.fixture()

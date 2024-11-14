@@ -1,0 +1,15 @@
+# For details on buf.yaml configuration, visit https://buf.build/docs/configuration/v2/buf-yaml
+version: v2
+modules:
+  - path: proto
+    # TODO: set appropriate name
+    name: buf.build/zerlok/brokrpc
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/grpc/grpc
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE

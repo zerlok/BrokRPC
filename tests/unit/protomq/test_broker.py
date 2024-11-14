@@ -1,7 +1,7 @@
 import pytest
-from protomq.abc import BrokerDriver
-from protomq.broker import Broker, BrokerNotConnectedError
-from protomq.options import BindingOptions
+from brokrpc.abc import BrokerDriver
+from brokrpc.broker import Broker, BrokerNotConnectedError
+from brokrpc.options import BindingOptions
 
 from tests.stub.driver import StubConsumer
 
