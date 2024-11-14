@@ -46,6 +46,15 @@ jobs:
         run: poetry run ruff format --check
   test:
     runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:4.0.2-management-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd="curl --fail http://localhost:15672/cli/ > /dev/null"
+          --health-timeout=30s
+          --health-retries=3
     strategy:
       fail-fast: false
       matrix:
@@ -72,7 +81,13 @@ jobs:
       - name: Install the project dependencies
         run: poetry install --all-extras
       - name: Run pytest
-        run: poetry run pytest --cov-report=xml
+        run: |-
+          poetry run pytest
+          --broker-url=amqp://guest:guest@localhost:5672/
+          --broker-retry-delay=3
+          --broker-retry-delay-mode=constant
+          --broker-retries-limit=10
+          --cov-report=xml
 # TODO: enable codecov
 #      - name: Upload results to Codecov
 #        uses: codecov/codecov-action@v4
