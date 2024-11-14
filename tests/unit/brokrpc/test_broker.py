@@ -19,7 +19,8 @@ def test_connected_broker_to_str_contains_appropriate_info(
     connected_broker: Broker,
 ) -> None:
     assert "is_connected=True" in str(connected_broker)
-    assert "driver" in str(connected_broker) and "driver=None" not in str(connected_broker)
+    assert "driver" in str(connected_broker)
+    assert "driver=None" not in str(connected_broker)
     assert repr(connected_broker)
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from brokrpc.message import Message, PackedMessage, UnpackedMessage
-from brokrpc.model import brokrpcError
+from brokrpc.model import BrokRPCError
 
 type Request[T] = Message[T]
 type BinaryRequest = Message[bytes]
@@ -14,7 +14,7 @@ type PackedResponse[T] = PackedMessage[T]
 type UnpackedResponse[T] = UnpackedMessage[T]
 
 
-class ServerError(brokrpcError):
+class ServerError(BrokRPCError):
     pass
 
 
@@ -22,7 +22,7 @@ class HandlerError(ServerError):
     pass
 
 
-class ClientError(brokrpcError):
+class ClientError(BrokRPCError):
     pass
 
 

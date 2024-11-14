@@ -73,7 +73,7 @@ class Broker(t.AsyncContextManager["Broker"]):
             ")"
         )
 
-    async def __aenter__(self) -> Broker:
+    async def __aenter__(self) -> t.Self:
         await self.connect()
         return self
 

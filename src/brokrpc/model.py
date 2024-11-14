@@ -25,23 +25,23 @@ class ConsumerRetry:
 type ConsumerResult = ConsumerAck | ConsumerReject | ConsumerRetry | bool | None
 
 
-class brokrpcError(Exception):
+class BrokRPCError(Exception):
     pass
 
 
-class BrokerError(brokrpcError):
+class BrokerError(BrokRPCError):
     pass
 
 
-class PublisherError(brokrpcError):
+class PublisherError(BrokRPCError):
     pass
 
 
-class ConsumerError(brokrpcError):
+class ConsumerError(BrokRPCError):
     pass
 
 
-class SerializerError(brokrpcError):
+class SerializerError(BrokRPCError):
     pass
 
 

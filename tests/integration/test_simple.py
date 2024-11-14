@@ -15,7 +15,6 @@ from brokrpc.rpc.server import Server
 from tests.stub.simple import ReceiveWaiter, ReceiveWaiterConsumer, ReceiveWaiterHandler
 
 
-# @pytest.mark.skip()
 async def test_consumer_receives_published_message(
     receive_waiter: ReceiveWaiter,
     consumer: object,

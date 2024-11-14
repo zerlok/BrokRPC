@@ -182,16 +182,19 @@ class Retryer:
 
             return get_const_delay
 
-        if mode == "multiplier":
+        elif mode == "multiplier":
 
             def get_mul_delay(i: int) -> float:
                 return clamp_delay(base_delay * i)
 
             return get_mul_delay
 
-        if mode == "exponential":
+        elif mode == "exponential":
 
             def get_exp_delay(i: int) -> float:
                 return clamp_delay(base_delay**i)
 
             return get_exp_delay
+
+        else:
+            t.assert_never(mode)

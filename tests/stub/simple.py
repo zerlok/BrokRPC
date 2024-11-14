@@ -7,14 +7,11 @@ from brokrpc.model import ConsumerResult
 from brokrpc.rpc.model import Request
 
 type ReceiveWaiterConsumer = (
-    Consumer[object, ConsumerResult]
-    | t.Callable[[object], t.Awaitable[ConsumerResult]]
-    | t.Callable[[object], ConsumerResult]
+    Consumer[Message[object], ConsumerResult]
+    | t.Callable[[Message[object]], t.Awaitable[ConsumerResult]]
+    | t.Callable[[Message[object]], ConsumerResult]
 )
-type ReceiveWaiterHandler = (
-    # Consumer[object, ConsumerResult]
-    t.Callable[[Request[object]], t.Awaitable[str]] | t.Callable[[Request[object]], str]
-)
+type ReceiveWaiterHandler = t.Callable[[Request[object]], t.Awaitable[str]] | t.Callable[[Request[object]], str]
 
 
 class ReceiveWaiter:

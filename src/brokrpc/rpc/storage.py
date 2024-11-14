@@ -53,23 +53,3 @@ class WaiterStorage[T]:
 
     def cancel(self, key: str, reason: str | None) -> None:
         self.__waiters[uuid.UUID(hex=key)].cancel(reason)
-
-
-# class StreamStorage[T]:
-#     def __init__(self) -> None:
-#         self.__waiters: dict[uuid.UUID, Stream[T]] = {}
-#
-#     @contextmanager
-#     async def context(self) -> t.Iterator[tuple[str, Reader[T]]]:
-#         key = uuid.uuid4()
-#         try:
-#             async with closing(Queue()) as queue:
-#                 self.__waiters[key] = queue
-#
-#                 yield key.hex, queue
-#
-#         finally:
-#             self.__waiters.pop(key, None)
-#
-#     async def push_result(self, key: str, value: T) -> None:
-#         await self.__waiters[uuid.UUID(hex=key)].write(value)

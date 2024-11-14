@@ -2,7 +2,10 @@ import typing as t
 from datetime import timedelta
 
 import pytest
-from _pytest.config import Parser
+
+# FIXME: find a way to import Parser
+# NOTE: fixes strange error `Module "_pytest.config" does not explicitly export attribute "Parser"`.
+from _pytest.config import Parser  # type: ignore[attr-defined]
 from _pytest.fixtures import SubRequest
 from brokrpc.broker import Broker
 from brokrpc.options import BrokerOptions
