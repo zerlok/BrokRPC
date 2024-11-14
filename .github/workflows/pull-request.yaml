@@ -71,14 +71,6 @@ jobs:
           key: venv-${{ hashFiles('poetry.lock') }}
       - name: Install the project dependencies
         run: poetry install --all-extras
-      - name: Download protoc ${{ matrix.protoc-version }}
-        run: wget -q -O protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v${{ matrix.protoc-version }}/protoc-${{ matrix.protoc-version }}-linux-x86_64.zip"
-      - name: Unzip protoc ${{ matrix.protoc-version }}
-        run: unzip -q -n protoc.zip 'bin/*' 'include/google/protobuf/*' -d .venv
-      - name: Download buf ${{ matrix.buf-version }}
-        run: wget -q -O .venv/bin/buf "https://github.com/bufbuild/buf/releases/download/v${{ matrix.buf-version }}/buf-Linux-x86_64"
-      - name: Allow run buf ${{ matrix.buf-version }}
-        run: chmod +x .venv/bin/buf
       - name: Run pytest
         run: poetry run pytest --cov-report=xml
 # TODO: enable codecov
