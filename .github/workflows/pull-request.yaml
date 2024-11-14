@@ -77,13 +77,7 @@ jobs:
       - name: Install the project dependencies
         run: poetry install --all-extras
       - name: Run pytest
-        run: |-
-          poetry run pytest
-          --broker-url=amqp://guest:guest@localhost:5672/
-          --broker-retry-delay=3
-          --broker-retry-delay-mode=constant
-          --broker-retries-limit=10
-          --cov-report=xml
+        run: poetry run pytest --broker-url=amqp://guest:guest@localhost:5672/ --broker-retry-delay=3 --broker-retry-delay-mode=constant --broker-retries-limit=10 --cov-report=xml
 # TODO: enable codecov
 #      - name: Upload results to Codecov
 #        uses: codecov/codecov-action@v4
