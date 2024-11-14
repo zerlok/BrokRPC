@@ -189,7 +189,7 @@ async def main() -> None:
 
     # register RPC handler
     server.register_unary_unary_handler(
-        handle_request,
+        func=handle_request,
         routing_key="test-greeting",
         serializer=JSONSerializer(),
     )
@@ -232,6 +232,7 @@ async def main() -> None:
     ):
         # publish app message & receive RPC response
         response = await caller.invoke("John")
+
         print(response)
         print(f"{response.body=}")
 

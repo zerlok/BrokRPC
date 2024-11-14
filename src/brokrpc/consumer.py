@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import typing as t
-from concurrent.futures import Executor
+
+if t.TYPE_CHECKING:
+    from concurrent.futures import Executor
 
 from brokrpc.abc import Consumer
 from brokrpc.stringify import to_str_obj
@@ -23,7 +25,8 @@ class DecodingConsumer[A, V, B](Consumer[A, V]):
         decoded_message = self.__decoder(message)
         result = await self.__inner.consume(decoded_message)
 
-        return result
+        # NOTE: `result` var is for debugger.
+        return result  # noqa: RET504
 
 
 class EncodingConsumer[U, A, B](Consumer[U, A]):
@@ -41,7 +44,8 @@ class EncodingConsumer[U, A, B](Consumer[U, A]):
         result = await self.__inner.consume(message)
         encoded_result = self.__encode(result)
 
-        return encoded_result
+        # NOTE: `encoded_result` var is for debugger.
+        return encoded_result  # noqa: RET504
 
 
 class SyncFuncConsumer[U, V](Consumer[U, V]):
@@ -58,7 +62,8 @@ class SyncFuncConsumer[U, V](Consumer[U, V]):
     async def consume(self, message: U) -> V:
         result = await asyncio.get_running_loop().run_in_executor(self.__executor, self.__func, message)
 
-        return result
+        # NOTE: `result` var is for debugger.
+        return result  # noqa: RET504
 
 
 class AsyncFuncConsumer[U, V](Consumer[U, V]):
@@ -74,4 +79,5 @@ class AsyncFuncConsumer[U, V](Consumer[U, V]):
     async def consume(self, message: U) -> V:
         result = await self.__func(message)
 
-        return result
+        # NOTE: `result` var is for debugger.
+        return result  # noqa: RET504

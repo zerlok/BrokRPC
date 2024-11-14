@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import typing as t
+
+if t.TYPE_CHECKING:
+    from datetime import timedelta
+
 from dataclasses import dataclass
-from datetime import timedelta
 from itertools import count
 
 
@@ -42,7 +45,7 @@ class RetryOptions:
 
 
 class Attempt:
-    def __init__(self, n: int, errors: t.List[Exception]) -> None:
+    def __init__(self, n: int, errors: list[Exception]) -> None:
         self.__n = n
         self.__errors = errors
         self.__ok: bool | None = None
@@ -137,7 +140,7 @@ class Retryer:
     ) -> BoundRetryer:
         return BoundRetryer(self, retry_on_exceptions, no_more_attempts_message)
 
-    async def __gen_attempts(self, errors: t.List[Exception]) -> t.AsyncIterable[Attempt]:
+    async def __gen_attempts(self, errors: list[Exception]) -> t.AsyncIterable[Attempt]:
         retries_limit = self.__options.retries_limit or 0
 
         attempt_delay_factory = self.__provide_attempt_delay_factory()
@@ -163,17 +166,7 @@ class Retryer:
 
         mode = self.__options.retry_delay_mode if self.__options.retry_delay_mode is not None else "multiplier"
         base_delay = self.__options.retry_delay.total_seconds()
-
-        if self.__options.retry_max_delay is not None:
-            max_delay = self.__options.retry_max_delay.total_seconds()
-
-            def clamp_delay(value: float) -> float:
-                return min(value, max_delay)
-
-        else:
-
-            def clamp_delay(value: float) -> float:
-                return value
+        clamp_delay = self.__get_clamp_delay()
 
         if mode == "constant":
 
@@ -198,3 +191,17 @@ class Retryer:
 
         else:
             t.assert_never(mode)
+
+    def __get_clamp_delay(self) -> t.Callable[[float], float]:
+        if self.__options.retry_max_delay is not None:
+            max_delay = self.__options.retry_max_delay.total_seconds()
+
+            def clamp_delay(value: float) -> float:
+                return min(value, max_delay)
+
+        else:
+
+            def clamp_delay(value: float) -> float:
+                return value
+
+        return clamp_delay

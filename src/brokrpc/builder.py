@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import inspect
 import typing as t
-from concurrent.futures import Executor
+
+if t.TYPE_CHECKING:
+    from concurrent.futures import Executor
+
 from contextlib import asynccontextmanager
 from dataclasses import replace
 
@@ -210,8 +213,7 @@ class ConsumerBuilder[U, V]:
                 consumer = SyncFuncConsumer(t.cast(t.Callable[[U], V], sync_func), executor)
 
             case _:
-                # FIXME: make assert_never work
-                # t.assert_never(inner)
+                # FIXME: make `t.assert_never(inner)` work
                 raise TypeError(inner)
 
         return self.__binder(self.__wrapper(consumer), self.__clear_binding_options(options))

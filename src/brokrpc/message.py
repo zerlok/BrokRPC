@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import abc
 import typing as t
-from datetime import datetime, timedelta
+
+if t.TYPE_CHECKING:
+    from datetime import datetime, timedelta
 
 from brokrpc.debug import is_debug_enabled
 from brokrpc.stringify import to_str_obj
@@ -146,7 +148,7 @@ class AppMessage[T](Message[T]):
         "__app_id",
     )
 
-    # NOTE: it's a constructor with kwonly args.
+    # NOTE: message constructor has a lot of options to set up a structure (dataclass)
     def __init__(  # noqa: PLR0913
         self,
         *,
@@ -282,7 +284,7 @@ class PackedMessage[T](Message[T]):
         "__message_type",
     )
 
-    # NOTE: it's a constructor with kwonly args.
+    # NOTE: message constructor has a lot of options to set up a structure (dataclass)
     def __init__(  # noqa: PLR0913
         self,
         *,

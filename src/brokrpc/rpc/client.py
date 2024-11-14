@@ -16,9 +16,11 @@ class Client:
     def __init__(self, broker: Broker) -> None:
         self.__broker = broker
 
+    # NOTE: caller provider function may have a lot of setup options.
     @asynccontextmanager
-    async def unary_unary_caller[U, V](
+    async def unary_unary_caller[U, V](  # noqa: PLR0913
         self,
+        *,
         routing_key: str,
         serializer: CallerSerializer[U, V],
         exchange: ExchangeOptions | None = None,

@@ -1,6 +1,6 @@
 import pytest
 from brokrpc.abc import BrokerDriver
-from brokrpc.broker import Broker, BrokerNotConnectedError
+from brokrpc.broker import Broker, BrokerIsNotConnectedError
 from brokrpc.options import BindingOptions
 
 from tests.stub.driver import StubConsumer
@@ -35,7 +35,7 @@ async def test_broker_connect_sets_is_connected(
 async def test_not_connected_broker_cant_provide_publisher(
     not_connected_broker: Broker,
 ) -> None:
-    with pytest.raises(BrokerNotConnectedError):
+    with pytest.raises(BrokerIsNotConnectedError):
         async with not_connected_broker.publisher():
             pass
 
@@ -44,7 +44,7 @@ async def test_not_connected_broker_cant_register_consumer(
     not_connected_broker: Broker,
     stub_consumer: StubConsumer,
 ) -> None:
-    with pytest.raises(BrokerNotConnectedError):
+    with pytest.raises(BrokerIsNotConnectedError):
         async with not_connected_broker.consumer(stub_consumer, BindingOptions(binding_keys=("test",))):
             pass
 

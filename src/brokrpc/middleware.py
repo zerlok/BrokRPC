@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import logging
+import typing as t
 from datetime import timedelta
+
+if t.TYPE_CHECKING:
+    from brokrpc.options import ConsumerOptions
 
 from brokrpc.abc import Consumer, ConsumerMiddleware, Publisher, PublisherMiddleware
 from brokrpc.model import ConsumerResult, ConsumerRetry
-from brokrpc.options import ConsumerOptions
 from brokrpc.stringify import to_str_obj
 
 

@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import typing as t
-from datetime import timedelta
 
-from brokrpc.abc import BinaryPublisher
+if t.TYPE_CHECKING:
+    from datetime import timedelta
+
+    from brokrpc.abc import BinaryPublisher
+    from brokrpc.options import ExchangeOptions
+    from brokrpc.rpc.model import BinaryRequest, Request, Response
+    from brokrpc.rpc.storage import WaiterStorage
+
+
 from brokrpc.message import AppMessage
-from brokrpc.options import ExchangeOptions
 from brokrpc.rpc.abc import Caller
-from brokrpc.rpc.model import BinaryRequest, Request, Response
-from brokrpc.rpc.storage import WaiterStorage
 from brokrpc.stringify import to_str_obj
 
 
 class RequestCaller[U, V](Caller[U, V]):
-    def __init__(
+    # TODO: shorter arguments
+    def __init__(  # noqa: PLR0913
         self,
         requester: BinaryPublisher,
         routing_key: str,

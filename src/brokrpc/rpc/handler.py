@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import typing as t
-from concurrent.futures import Executor
+
+if t.TYPE_CHECKING:
+    from concurrent.futures import Executor
+
+    from brokrpc.rpc.abc import HandlerSerializer
+    from brokrpc.rpc.model import BinaryResponse, Request
+    from brokrpc.rpc.storage import WaiterStorage
 
 from brokrpc.abc import Consumer, Publisher
 from brokrpc.message import AppMessage, BinaryMessage, Message
 from brokrpc.model import ConsumerAck, ConsumerReject, ConsumerResult, PublisherResult
-from brokrpc.rpc.abc import HandlerSerializer
-from brokrpc.rpc.model import BinaryResponse, Request
-from brokrpc.rpc.storage import WaiterStorage
 
 
 class SyncFuncHandler[U, V](Consumer[BinaryMessage, ConsumerResult]):
@@ -33,7 +36,7 @@ class SyncFuncHandler[U, V](Consumer[BinaryMessage, ConsumerResult]):
         )
 
         if isinstance(handle_result, ConsumerAck):
-            response_result = await self.__replier.publish(response_message)
+            await self.__replier.publish(response_message)
 
         return handle_result
 
@@ -68,7 +71,7 @@ class AsyncFuncHandler[U, V](Consumer[BinaryMessage, ConsumerResult]):
         request_payload = self.__serializer.load_unary_request(request_message)
         response_payload = await self.__func(request_payload)
         response_message = response_factory(response_payload)
-        response_result = await self.__replier.publish(response_message)
+        await self.__replier.publish(response_message)
 
         return ConsumerAck()
 
@@ -86,7 +89,8 @@ class HandlerResponseConsumer[T](Consumer[BinaryMessage, ConsumerResult]):
         try:
             result = self.__serializer(response_message)
 
-        except Exception as err:
+        # NOTE: caught exception is propagated via storage waiter
+        except Exception as err:  # noqa: BLE001
             result = err
 
         self.__storage.set_waiter(response_message.correlation_id, result)
@@ -110,7 +114,8 @@ def get_response_factory[U, V](
             )
             response_message = serializer.dump_unary_response(reply)
 
-            return response_message
+            # NOTE: `response_message` var is for debugger.
+            return response_message  # noqa: RET504
 
         return create
 

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import typing as t
-from concurrent.futures import Executor
+
+if t.TYPE_CHECKING:
+    from concurrent.futures import Executor
+
+    from brokrpc.message import BinaryMessage
+
 from contextlib import AsyncExitStack
 from functools import partial
 
@@ -20,7 +25,6 @@ from brokrpc.abc import (
     Serializer,
 )
 from brokrpc.builder import ConsumerBuilder, PublisherBuilder, ident
-from brokrpc.message import BinaryMessage
 from brokrpc.model import BrokerError, ConsumerResult, PublisherResult
 from brokrpc.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
 from brokrpc.stringify import to_str_obj
@@ -28,14 +32,16 @@ from brokrpc.stringify import to_str_obj
 type BrokerConnectOptions = str | URL | t.AsyncContextManager[BrokerDriver] | BrokerOptions
 
 
-class BrokerNotConnectedError(BrokerError):
+class BrokerIsNotConnectedError(BrokerError):
     pass
 
 
 class Broker(t.AsyncContextManager["Broker"]):
-    def __init__(
+    # NOTE: broker is a high level API class, constructor provides configuring it with different options
+    def __init__(  # noqa: PLR0913
         self,
         options: BrokerConnectOptions,
+        *,
         default_exchange: ExchangeOptions | None = None,
         default_queue: QueueOptions | None = None,
         default_publisher_middlewares: t.Sequence[PublisherMiddleware[BinaryPublisher, BinaryMessage, PublisherResult]]
@@ -225,7 +231,7 @@ class Broker(t.AsyncContextManager["Broker"]):
     def __get_driver(self) -> BrokerDriver:
         if self.__driver is None:
             assert not self.is_connected
-            raise BrokerNotConnectedError(self)
+            raise BrokerIsNotConnectedError(self)
 
         assert self.is_connected
         return self.__driver
@@ -259,10 +265,9 @@ def parse_options(url: str | URL) -> BrokerOptions:
     clean_url = URL(url) if isinstance(url, str) else url
 
     parts = clean_url.scheme.split("+", maxsplit=1)
-    if len(parts) == 2:
-        scheme, driver = parts
+    match parts:
+        case (scheme, driver):
+            return BrokerOptions(driver=driver, url=clean_url.with_scheme(scheme))
 
-    else:
-        scheme, driver = parts[0], "aiormq"
-
-    return BrokerOptions(driver=driver, url=clean_url.with_scheme(scheme))
+        case _:
+            return BrokerOptions(driver="aiormq", url=clean_url)

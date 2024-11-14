@@ -4,8 +4,6 @@ import typing as t
 from dataclasses import asdict, dataclass, replace
 
 if t.TYPE_CHECKING:
-    from datetime import datetime, timedelta
-
     from _typeshed import DataclassInstance
     from yarl import URL
 
@@ -76,7 +74,8 @@ class BindingOptions:
                 "a string (a sequence of chars) can't be used as a list of binding keys, it's a possible typo in "
                 "the code (missed comma in tuple), try to provide a sequence of binding keys explicitly"
             )
-            raise ValueError(details, list(self.binding_keys))
+            # NOTE: `str` is a valid type for `t.Sequence[str]`, but this value for binding_keys is not good.
+            raise ValueError(details, list(self.binding_keys))  # noqa: TRY004
 
         if not self.binding_keys:
             details = "at least one binding key must be set"
@@ -91,25 +90,6 @@ class ConsumerOptions(QueueOptions, RetryOptions, DecoratorOptions):
 @dataclass(frozen=True, kw_only=True)
 class PublisherOptions(ExchangeOptions):
     mandatory: bool | None = None
-
-
-@dataclass(frozen=True, kw_only=True)
-class MessageOptions:
-    # routing_key: str | None = None
-    exchange: str | None = None
-    content_type: str | None = None
-    content_encoding: str | None = None
-    headers: t.Mapping[str, str] | None = None
-    delivery_mode: int | None = None
-    priority: int | None = None
-    correlation_id: str | None = None
-    reply_to: str | None = None
-    timeout: timedelta | None = None
-    message_id: str | None = None
-    timestamp: datetime | None = None
-    message_type: str | None = None
-    user_id: str | None = None
-    app_id: str | None = None
 
 
 def merge_options[T: DataclassInstance](*options: T | None) -> T | None:

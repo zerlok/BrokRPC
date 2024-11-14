@@ -8,7 +8,7 @@ from brokrpc.abc import BinaryPublisher, Publisher, Serializer
 from brokrpc.broker import Broker
 from brokrpc.message import AppMessage, Message
 from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
-from brokrpc.rpc.abc import Caller, CallerSerializer
+from brokrpc.rpc.abc import Caller, CallerSerializer, RPCSerializer
 from brokrpc.rpc.client import Client
 from brokrpc.rpc.server import Server
 
@@ -61,9 +61,8 @@ def receive_waiter_consumer(
 
 @pytest.fixture(
     params=[
-        # pytest.param(ReceiveWaiter.handler_sync),
         pytest.param(ReceiveWaiter.handler_async),
-        # pytest.param(ReceiveWaiter.handler_impl),
+        # TODO: support ReceiveWaiter.handler_sync & ReceiveWaiter.handler_impl
     ],
 )
 def receive_waiter_handler(
@@ -100,13 +99,13 @@ def handler(
     routing_key: str,
     binding_options: BindingOptions,
     rpc_server: Server,
-    json_serializer: Serializer[Message[object], Message[bytes]],
+    json_serializer: RPCSerializer[object, object],
     receive_waiter_handler: ReceiveWaiterHandler,
 ) -> ReceiveWaiterHandler:
     rpc_server.register_unary_unary_handler(
-        receive_waiter_handler,
-        routing_key,
-        json_serializer,
+        func=receive_waiter_handler,
+        routing_key=routing_key,
+        serializer=json_serializer,
         exchange=binding_options.exchange,
         queue=binding_options.queue,
     )
@@ -121,7 +120,11 @@ async def caller(
     rpc_client: Client,
     json_serializer: CallerSerializer[object, object],
 ) -> t.AsyncIterator[Caller[object, object]]:
-    async with rpc_client.unary_unary_caller(routing_key, json_serializer, exchange=exchange) as caller:
+    async with rpc_client.unary_unary_caller(
+        routing_key=routing_key,
+        serializer=json_serializer,
+        exchange=exchange,
+    ) as caller:
         yield caller
 
 

@@ -11,7 +11,7 @@ type ReceiveWaiterConsumer = (
     | t.Callable[[Message[object]], t.Awaitable[ConsumerResult]]
     | t.Callable[[Message[object]], ConsumerResult]
 )
-type ReceiveWaiterHandler = t.Callable[[Request[object]], t.Awaitable[str]] | t.Callable[[Request[object]], str]
+type ReceiveWaiterHandler = t.Callable[[Request[object]], t.Awaitable[str]]
 
 
 class ReceiveWaiter:

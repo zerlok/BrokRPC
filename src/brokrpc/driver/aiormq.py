@@ -167,19 +167,8 @@ class AiormqConsumerCallback:
 
         message = AiormqMessage(aiormq_message)
         result = await self.__inner.consume(message)
-        await self.__handle_result(aiormq_message, result)
-
         # TODO: check how aiormq handles exception
-        # try:
-        #
-        # except Exception as err:
-        #     logging.exception("fatal consumer err", exc_info=err)
-        #     await self.__channel.basic_reject(
-        #         delivery_tag=aiormq_message.delivery_tag,
-        #         requeue=False,
-        #     )
-        #
-        # else:
+        await self.__handle_result(aiormq_message, result)
 
     async def __handle_result(self, message: DeliveredMessage, result: ConsumerResult) -> None:
         assert isinstance(message.delivery_tag, int)

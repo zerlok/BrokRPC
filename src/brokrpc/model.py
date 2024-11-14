@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import typing as t
 from dataclasses import dataclass
-from datetime import timedelta
+
+if t.TYPE_CHECKING:
+    from datetime import timedelta
 
 type PublisherResult = bool | None
 

@@ -32,8 +32,8 @@ async def main() -> None:
 
     # register RPC handler
     server.register_unary_unary_handler(
-        handle_request,
-        routing_key,
+        func=handle_request,
+        routing_key=routing_key,
         serializer=serializer,
     )
 
@@ -44,7 +44,7 @@ async def main() -> None:
         server.run(),
         # get RPC caller
         client.unary_unary_caller(
-            routing_key,
+            routing_key=routing_key,
             serializer=serializer,
             # timeout=timedelta(seconds=10.0),
         ) as caller,

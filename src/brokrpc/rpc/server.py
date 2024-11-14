@@ -6,14 +6,17 @@ import typing as t
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from datetime import timedelta
 from functools import partial
 from signal import Signals
 
-from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer
-from brokrpc.broker import Broker
+if t.TYPE_CHECKING:
+    from datetime import timedelta
+
+    from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer
+    from brokrpc.broker import Broker
+    from brokrpc.rpc.abc import HandlerSerializer, UnaryUnaryFunc
+
 from brokrpc.options import BindingOptions, ExchangeOptions, QueueOptions, merge_options
-from brokrpc.rpc.abc import HandlerSerializer, UnaryUnaryFunc
 from brokrpc.rpc.handler import AsyncFuncHandler
 from brokrpc.rpc.model import Request, ServerError
 from brokrpc.stringify import to_str_obj
@@ -67,8 +70,10 @@ class Server:
     def state(self) -> State:
         return self.__state
 
-    def register_unary_unary_handler[U, V](
+    # NOTE: handler registrator function may have a lot of setup options.
+    def register_unary_unary_handler[U, V](  # noqa: PLR0913
         self,
+        *,
         func: UnaryUnaryFunc[Request[U], V],
         routing_key: str,
         serializer: HandlerSerializer[U, V],

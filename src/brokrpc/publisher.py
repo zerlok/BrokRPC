@@ -18,7 +18,8 @@ class EncodingPublisher[A, V, B](Publisher[B, V]):
         encoded_message = self.__encoder(message)
         result = await self.__inner.publish(encoded_message)
 
-        return result
+        # NOTE: `result` var is for debugger.
+        return result  # noqa: RET504
 
 
 class DecodingPublisher[U, A, B](Publisher[U, B]):
@@ -33,4 +34,5 @@ class DecodingPublisher[U, A, B](Publisher[U, B]):
         result = await self.__inner.publish(message)
         decoded_result = self.__decoder(result)
 
-        return decoded_result
+        # NOTE: `decoded_result` var is for debugger.
+        return decoded_result  # noqa: RET504
