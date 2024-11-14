@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package fibo;
+
+import "brokrpc/spec/v1/amqp.proto";
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/empty.proto";
+
+message FiboRequest {
+  uint64 n = 1;
+}
+
+message FiboResponse {
+  uint64 result = 1;
+}
+
+service Fibo {
+  option (brokrpc.spec.v1.exchange) = {
+    name: "test"
+    type: EXCHANGE_TYPE_DIRECT
+    durable: true
+  };
+
+  /* Hello world count_fibo! */
+  rpc CountFibo(FiboRequest) returns (FiboResponse) {
+    option (brokrpc.spec.v1.queue) = {durable: true};
+  }
+
+  rpc NotifyFibo(FiboRequest) returns (google.protobuf.Empty) {}
+}

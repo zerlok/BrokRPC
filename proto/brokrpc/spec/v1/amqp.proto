@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package brokrpc.spec.v1;
+
+import "google/protobuf/descriptor.proto";
+
+/* All possible types of exchanges in AMQP */
+enum ExchangeType {
+  EXCHANGE_TYPE_UNSPECIFIED = 0;
+  EXCHANGE_TYPE_DIRECT = 1;
+  EXCHANGE_TYPE_FANOUT = 2;
+  EXCHANGE_TYPE_TOPIC = 3;
+  EXCHANGE_TYPE_HEADER = 4;
+}
+
+message ArgumentListValue {
+  repeated ArgumentValue items = 1;
+}
+
+message ArgumentMapValue {
+  map<string, ArgumentValue> items = 1;
+}
+
+message ArgumentValue {
+  oneof value {
+    bool null_value = 1;
+    bool bool_value = 2;
+    int64 int_value = 3;
+    float float_value = 4;
+    string str_value = 5;
+    ArgumentListValue list_value = 6;
+    ArgumentMapValue map_value = 7;
+  }
+}
+
+/* A set of attributes of exchange entity in AMQP */
+message ExchangeOptions {
+  optional string name = 1;
+  optional ExchangeType type = 2;
+  optional bool durable = 3;
+  optional bool auto_delete = 4;
+  map<string, ArgumentValue> arguments = 5;
+}
+
+/* A set of attributes of queue entity in AMQP */
+message QueueOptions {
+  optional string name = 1;
+  optional bool durable = 2;
+  optional bool exclusive = 3;
+  optional bool auto_delete = 4;
+  map<string, ArgumentValue> arguments = 5;
+}
+
+extend google.protobuf.ServiceOptions {
+  // TODO: acquire field number for a public extension.
+  optional ExchangeOptions exchange = 5672;
+}
+
+extend google.protobuf.MethodOptions {
+  // TODO: acquire field number for a public extension.
+  optional QueueOptions queue = 5672;
+}
