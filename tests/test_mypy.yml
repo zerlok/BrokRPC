@@ -1,0 +1,179 @@
+- case: message_body_covariance
+  main: |-
+    from stubs import *
+
+    {{ handler }}({{ msg }})  # {{ expected }}
+
+  parametrized:
+    # positive
+    - handler: handle_object
+      msg: create_msg(object())
+      expected: Y
+    - handler: handle_object
+      msg: create_msg(b"binary data")
+      expected: Y
+    - handler: handle_object
+      msg: create_msg(Foo())
+      expected: Y
+    - handler: handle_binary
+      msg: create_msg(b"binary data")
+      expected: Y
+    - handler: handle_foo
+      msg: create_msg(Foo())
+      expected: Y
+
+    # negative
+    - handler: handle_object
+      msg: object()
+      expected: |-
+        E: Argument 1 to "handle_object" has incompatible type "object"; expected "Message[object]"  [arg-type]
+    - handler: handle_binary
+      msg: |-
+        b"binary data"
+      expected: |-
+        E: Argument 1 to "handle_binary" has incompatible type "bytes"; expected "Message[bytes]"  [arg-type]
+    - handler: handle_binary
+      msg: object()
+      expected: |-
+        E: Argument 1 to "handle_binary" has incompatible type "object"; expected "Message[bytes]"  [arg-type]
+    - handler: handle_foo
+      msg: Foo()
+      expected: |-
+        E: Argument 1 to "handle_foo" has incompatible type "Foo"; expected "Message[Foo]"  [arg-type]
+    - handler: handle_foo
+      msg: object()
+      expected: |-
+        E: Argument 1 to "handle_foo" has incompatible type "object"; expected "Message[Foo]"  [arg-type]
+  files:
+    - path: stubs.py
+      content: |-
+        from brokrpc.message import Message
+
+        def create_msg[T](value: T) -> Message[T]:
+            raise NotImplementedError
+
+        class Foo:
+            pass
+
+        def handle_object(msg: Message[object]) -> None:
+            raise NotImplementedError
+
+        def handle_binary(msg: Message[bytes]) -> None:
+            raise NotImplementedError
+
+        def handle_foo(msg: Message[Foo]) -> None:
+            raise NotImplementedError
+
+
+- case: serializer_invariance
+  main: |-
+    from stubs import *
+
+    handle({{ msg }}, {{ ser }})  # {{ expected }}
+
+  parametrized:
+    # positive
+    - msg: object()
+      ser: create_serializer(object())
+      expected: Y
+    - msg: create_msg(object())
+      ser: create_serializer(create_msg(object()))
+      expected: Y
+    - msg: Foo()
+      ser: create_serializer(Foo())
+      expected: Y
+    - msg: create_msg(Foo())
+      ser: create_serializer(create_msg(Foo()))
+      expected: Y
+    - msg: create_msg(object())
+      ser: create_serializer(object())
+      expected: Y
+    - msg: Foo()
+      ser: create_serializer(object())
+      expected: Y
+    - msg: create_msg(Foo())
+      ser: create_serializer(object())
+      expected: Y
+    - msg: create_msg(Foo())
+      ser: create_serializer(create_msg(object()))
+      expected: Y
+
+    # negative
+    - msg: object()
+      ser: create_serializer(create_msg(object()))
+      expected: |-
+        E: Cannot infer type argument 1 of "handle"  [misc]
+  files:
+    - path: stubs.py
+      content: |
+        from brokrpc.abc import Serializer
+        from brokrpc.message import Message
+
+        def create_msg[T](value: T) -> Message[T]:
+            raise NotImplementedError
+
+        def create_serializer[T](value: T) -> Serializer[T, object]:
+            raise NotImplementedError
+
+        class Foo:
+            pass
+
+        def handle[T](msg: T, serializer: Serializer[T, object]) -> None:
+            raise NotImplementedError
+
+
+- case: json_serializer
+  main: |-
+    from brokrpc.serializer.json import JSONSerializer
+    
+    from stubs import *
+    
+    handle({{ msg }}, JSONSerializer())  # {{ expected }}
+
+  parametrized:
+    # positive
+    - msg: |-
+        create_msg(True)
+      expected: Y
+    - msg: create_msg(42)
+      expected: Y
+    - msg: |-
+        create_msg("hello world")
+      expected: Y
+    - msg: |-
+        create_msg(15.16)
+      expected: Y
+    - msg: create_msg([1, 2, 3])
+      expected: Y
+    - msg: |-
+        create_msg({"foo": "bar"})
+      expected: Y
+
+    # negative
+    - msg: object()
+      expected: |-
+        E: Cannot infer type argument 1 of "handle"  [misc]
+    - msg: Foo()
+      expected: |-
+        E: Cannot infer type argument 1 of "handle"  [misc]
+    - msg: 42
+      expected: |-
+        E: Cannot infer type argument 1 of "handle"  [misc]
+    - msg: |-
+        [1, 2, 3]
+      expected: |-
+        E: Cannot infer type argument 1 of "handle"  [misc]
+  files:
+    - path: stubs.py
+      content: |
+        from brokrpc.abc import Serializer
+        from brokrpc.message import Message
+        
+        def create_msg[T](value: T) -> Message[T]:
+            raise NotImplementedError
+        
+        class Foo:
+            pass
+
+        def handle[T](msg: T, serializer: Serializer[T, Message[bytes]]) -> None:
+            raise NotImplementedError

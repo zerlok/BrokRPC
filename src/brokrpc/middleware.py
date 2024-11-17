@@ -8,7 +8,14 @@ if t.TYPE_CHECKING:
     from brokrpc.options import ConsumerOptions
 
 from brokrpc.abc import Consumer, ConsumerMiddleware, Publisher, PublisherMiddleware
-from brokrpc.model import ConsumerResult, ConsumerRetry
+from brokrpc.model import (
+    ConsumerReject,
+    ConsumerResult,
+    ConsumerRetry,
+    PublisherResult,
+    SerializerDumpError,
+    SerializerLoadError,
+)
 from brokrpc.stringify import to_str_obj
 
 
@@ -34,6 +41,33 @@ class ConsumerMiddlewareWrapper[T, U, V](Consumer[U, V]):
 
     async def consume(self, message: U) -> V:
         return await self.__middleware.consume(self.__inner, message)
+
+
+class AbortBadMessageMiddleware[T](
+    PublisherMiddleware[Publisher[T, PublisherResult], T, PublisherResult],
+    ConsumerMiddleware[Consumer[T, ConsumerResult], T, ConsumerResult],
+):
+    async def publish(self, inner: Publisher[T, PublisherResult], message: T) -> PublisherResult:
+        try:
+            result = await inner.publish(message)
+
+        except SerializerDumpError as err:
+            logging.warning("%s publisher serializer failed on %s, aborting", inner, message, exc_info=err)
+            result = False
+
+        return result
+
+    async def consume(self, inner: Consumer[T, ConsumerResult], message: T) -> ConsumerResult:
+        try:
+            result = await inner.consume(message)
+
+        except SerializerLoadError as err:
+            logging.warning("%s consumer serializer failed on %s, aborting", inner, message, exc_info=err)
+            result = ConsumerReject(
+                reason=f"{inner} exception occurred: {err}",
+            )
+
+        return result
 
 
 class RetryOnErrorConsumerMiddleware[T](ConsumerMiddleware[Consumer[T, ConsumerResult], T, ConsumerResult]):

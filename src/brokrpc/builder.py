@@ -181,7 +181,7 @@ class ConsumerBuilder[U, V]:
     @t.overload
     def build(
         self,
-        inner: t.Callable[[U], t.Awaitable[V]],
+        inner: t.Callable[[U], t.Coroutine[object, object, V]],
         options: BindingOptions,
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
@@ -196,7 +196,7 @@ class ConsumerBuilder[U, V]:
 
     def build(
         self,
-        inner: Consumer[U, V] | t.Callable[[U], t.Awaitable[V]] | t.Callable[[U], V],
+        inner: Consumer[U, V] | t.Callable[[U], t.Coroutine[object, object, V]] | t.Callable[[U], V],
         options: BindingOptions,
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]:
@@ -209,7 +209,7 @@ class ConsumerBuilder[U, V]:
             case async_func if inspect.iscoroutinefunction(async_func):
                 consumer = AsyncFuncConsumer(async_func)
 
-            case sync_func if inspect.isfunction(sync_func):
+            case sync_func if callable(sync_func):
                 consumer = SyncFuncConsumer(t.cast(t.Callable[[U], V], sync_func), executor)
 
             case _:
