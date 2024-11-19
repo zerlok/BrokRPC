@@ -100,6 +100,8 @@ class JSONProtobufSerializer[T: ProtobufMessage](Serializer[Message[bytes], Mess
                 PackedMessage(
                     body=message.body,
                     content_type="application/json",
+                    content_encoding=None,
+                    message_type=None,
                     original=message,
                 )
             )
@@ -108,12 +110,12 @@ class JSONProtobufSerializer[T: ProtobufMessage](Serializer[Message[bytes], Mess
             details = "can't load json message"
             raise SerializerDumpError(details, message) from err
 
-        if not isinstance(json_message, dict):
+        if not self.__check_json_message(json_message.body):
             details = "can't dump non object json to protobuf"
             raise SerializerDumpError(details, json_message)
 
         try:
-            payload = self.__message_type(**json_message)
+            payload = self.__message_type(**json_message.body)
 
         except (TypeError, ValueError) as err:
             details = "can't construct protobuf message"
@@ -135,6 +137,9 @@ class JSONProtobufSerializer[T: ProtobufMessage](Serializer[Message[bytes], Mess
             original=protobuf_message,
             body=json_payload.encode(),
         )
+
+    def __check_json_message(self, obj: object) -> t.TypeGuard[dict[str, object]]:
+        return isinstance(obj, dict) and all(isinstance(key, str) for key in obj)
 
 
 def pack_any(msg: ProtobufMessage) -> Any:

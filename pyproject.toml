@@ -7,9 +7,15 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-protobuf = "^5.26.1"
-aiormq = {version = "^6.8.1"}
-googleapis-common-protos = "^1.65.0"
+protobuf = {version = "^5.26.1", optional = true}
+googleapis-common-protos = {version = "^1.65.0", optional = true}
+aiormq = {version = "^6.8.1", optional = true}
+aiofiles = {version = "^24.1.0", optional = true}
+
+[tool.poetry.extras]
+cli = ["aiofiles"]
+protobuf = ["protobuf", "googleapis-common-protos"]
+aiormq = ["aiormq"]
 
 [tool.poetry.group.dev.dependencies]
 types-protobuf = "^5.26.0.20240422"
@@ -21,6 +27,7 @@ pytest-asyncio = "^0.24.0"
 pyprotostuben = "^0.1.2"
 pytest-timeout = "^2.3.1"
 pytest-mypy-plugins = "^3.1.2"
+types-aiofiles = "^24.1.0.20240626"
 
 
 [build-system]

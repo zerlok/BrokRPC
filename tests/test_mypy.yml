@@ -67,67 +67,64 @@
 
 - case: serializer_invariance
   main: |-
+    from brokrpc.abc import Serializer
+    
     from stubs import *
+    
+    def create() -> {{ ser }}:
+        raise NotImplementedError
+    
+    def handle(s: {{ handle }}) -> None:
+        raise NotImplementedError
 
-    handle({{ msg }}, {{ ser }})  # {{ expected }}
+    handle(create())  # {{ expected }}
 
   parametrized:
     # positive
-    - msg: object()
-      ser: create_serializer(object())
+    - handle: Serializer[object, object]
+      ser: Serializer[object, object]
       expected: Y
-    - msg: create_msg(object())
-      ser: create_serializer(create_msg(object()))
-      expected: Y
-    - msg: Foo()
-      ser: create_serializer(Foo())
-      expected: Y
-    - msg: create_msg(Foo())
-      ser: create_serializer(create_msg(Foo()))
-      expected: Y
-    - msg: create_msg(object())
-      ser: create_serializer(object())
-      expected: Y
-    - msg: Foo()
-      ser: create_serializer(object())
-      expected: Y
-    - msg: create_msg(Foo())
-      ser: create_serializer(object())
-      expected: Y
-    - msg: create_msg(Foo())
-      ser: create_serializer(create_msg(object()))
+    - handle: Serializer[Foo, Bar]
+      ser: Serializer[Foo, Bar]
       expected: Y
 
     # negative
-    - msg: object()
-      ser: create_serializer(create_msg(object()))
+    - handle: Serializer[object, object]
+      ser: Serializer[Foo, Bar]
       expected: |-
-        E: Cannot infer type argument 1 of "handle"  [misc]
+        E: Argument 1 to "handle" has incompatible type "Serializer[Foo, Bar]"; expected "Serializer[object, object]"  [arg-type]
+    - handle: Serializer[Foo, Bar]
+      ser: Serializer[object, object]
+      expected: |-
+        E: Argument 1 to "handle" has incompatible type "Serializer[object, object]"; expected "Serializer[Foo, Bar]"  [arg-type]
+    - handle: Serializer[Bar, Foo]
+      ser: Serializer[Foo, Bar]
+      expected: |-
+        E: Argument 1 to "handle" has incompatible type "Serializer[Foo, Bar]"; expected "Serializer[Bar, Foo]"  [arg-type]
   files:
     - path: stubs.py
-      content: |
-        from brokrpc.abc import Serializer
-        from brokrpc.message import Message
-
-        def create_msg[T](value: T) -> Message[T]:
-            raise NotImplementedError
-
-        def create_serializer[T](value: T) -> Serializer[T, object]:
-            raise NotImplementedError
-
+      content: |-
         class Foo:
             pass
 
-        def handle[T](msg: T, serializer: Serializer[T, object]) -> None:
-            raise NotImplementedError
+        class Bar:
+            pass
 
 
 - case: json_serializer
   main: |-
+    from brokrpc.abc import Serializer
+    from brokrpc.message import Message
     from brokrpc.serializer.json import JSONSerializer
     
     from stubs import *
     
+    def create_msg[T](value: T) -> Message[T]:
+        raise NotImplementedError
+
+    def handle[T](msg: T, serializer: Serializer[T, Message[bytes]]) -> None:
+        raise NotImplementedError
+
     handle({{ msg }}, JSONSerializer())  # {{ expected }}
 
   parametrized:
@@ -165,15 +162,6 @@
         E: Cannot infer type argument 1 of "handle"  [misc]
   files:
     - path: stubs.py
-      content: |
-        from brokrpc.abc import Serializer
-        from brokrpc.message import Message
-        
-        def create_msg[T](value: T) -> Message[T]:
-            raise NotImplementedError
-        
+      content: |-
         class Foo:
             pass
-
-        def handle[T](msg: T, serializer: Serializer[T, Message[bytes]]) -> None:
-            raise NotImplementedError

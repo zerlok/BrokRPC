@@ -3,13 +3,16 @@ import sys
 import typing as t
 from argparse import ArgumentParser
 from functools import partial
+from signal import Signals
 from uuid import uuid4
 
+from aiofiles import stderr_bytes, stdin_bytes, stdout_bytes
+from aiofiles.threadpool.binary import AsyncIndirectBufferedIOBase
 from yarl import URL
 
 from brokrpc.abc import Serializer
 from brokrpc.broker import Broker
-from brokrpc.entrypoint import load_class, load_instance
+from brokrpc.entrypoint import Loader
 from brokrpc.message import AppMessage, BinaryMessage, Message
 from brokrpc.middleware import AbortBadMessageMiddleware
 from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
@@ -22,21 +25,32 @@ class CLIOptions:
     routing_key: str
     kind: t.Literal["consumer", "publisher"]
     serializer: Serializer[Message[object], BinaryMessage]
-    input: t.IO[bytes]
-    output: t.IO[bytes]
-    err: t.IO[bytes]
+    output_mode: t.Literal["wide", "body"]
+    quiet: bool
+    input: AsyncIndirectBufferedIOBase
+    output: AsyncIndirectBufferedIOBase
+    err: AsyncIndirectBufferedIOBase
+    done: asyncio.Event
+
+    def __str__(self) -> str:
+        data = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items())
+        return f"{self.__class__.__name__}({data})"
+
+    __repr__ = __str__
 
 
 async def run(options: CLIOptions) -> int:
-    async with Broker(
-        options.url,
-        default_publisher_middlewares=[
-            AbortBadMessageMiddleware(),
-        ],
-        default_consumer_middlewares=[
-            AbortBadMessageMiddleware(),
-        ],
-    ) as broker:
+    async with (
+        Broker(
+            options.url,
+            default_publisher_middlewares=[
+                AbortBadMessageMiddleware(),
+            ],
+            default_consumer_middlewares=[
+                AbortBadMessageMiddleware(),
+            ],
+        ) as broker,
+    ):
         match options.kind:
             case "consumer":
                 return await run_consumer(broker, options)
@@ -50,7 +64,9 @@ async def run(options: CLIOptions) -> int:
 
 async def run_consumer(broker: Broker, options: CLIOptions) -> int:
     async with broker.consumer(
-        partial(consume_message, options.output),
+        partial(consume_message, options.output)
+        if options.output_mode == "wide"
+        else partial(consume_message_body, options.output),
         BindingOptions(
             exchange=options.exchange,
             binding_keys=[options.routing_key],
@@ -63,8 +79,7 @@ async def run_consumer(broker: Broker, options: CLIOptions) -> int:
         ),
         serializer=options.serializer,
     ):
-        async for _ in read_lines(options.input):
-            pass
+        await options.done.wait()
 
         return 0
 
@@ -79,16 +94,20 @@ async def run_publisher(broker: Broker, options: CLIOptions) -> int:
         else PublisherOptions(prefetch_count=1),
         serializer=options.serializer,
     ) as publisher:
-        async for body in read_lines(options.input):
+        async for body in options.input:
             message = AppMessage(body=body, routing_key=options.routing_key)
             result = await publisher.publish(message)
 
             match result:
                 case True | None:
-                    pass
+                    if not options.quiet:
+                        await options.err.write(b"sent\n")
+                        await options.err.flush()
 
                 case False:
-                    await write_lines(options.err, f"failed to send: {message!r}")
+                    if not options.quiet:
+                        await options.err.write(f"failed to send: {message!r}\n".encode())
+                        await options.err.flush()
 
                 case _:
                     t.assert_never(result)
@@ -96,36 +115,14 @@ async def run_publisher(broker: Broker, options: CLIOptions) -> int:
         return 0
 
 
-async def consume_message(out: t.IO[bytes], message: Message[object]) -> None:
-    await write_lines(out, repr(message))
+async def consume_message(out: AsyncIndirectBufferedIOBase, message: Message[object]) -> None:
+    await out.write(f"{message!r}\n".encode())
+    await out.flush()
 
 
-async def read_lines(in_: t.IO[bytes]) -> t.AsyncIterator[bytes]:
-    loop = asyncio.get_running_loop()
-
-    while not in_.closed:
-        line = await loop.run_in_executor(None, in_.readline)
-        if not line:
-            break
-
-        yield line
-
-
-async def write_lines(out: t.IO[bytes], *lines: str) -> None:
-    loop = asyncio.get_running_loop()
-
-    for line in lines:
-        await loop.run_in_executor(None, out.write, f"{line}\n".encode())
-
-
-def parse_options(args: t.Sequence[str]) -> CLIOptions:
-    options = build_parser().parse_args(args, namespace=CLIOptions())
-
-    options.input = sys.stdin.buffer
-    options.output = sys.stdout.buffer
-    options.err = sys.stderr.buffer
-
-    return options
+async def consume_message_body(out: AsyncIndirectBufferedIOBase, message: Message[bytes]) -> None:
+    await out.write(message.body + b"\n")
+    await out.flush()
 
 
 def build_parser() -> ArgumentParser:
@@ -173,8 +170,28 @@ def build_parser() -> ArgumentParser:
         "--serializer",
         type=parse_serializer,
         help="customize serializer. Available options: json, protobuf:{entrypoint to protobuf message class}, "
-        "{entrypoint to serializer class}",
+        "{entrypoint to serializer class}. Default: none (pass binary data to body as is).",
         default=IdentSerializer(),
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        dest="output_mode",
+        choices=["wide", "body"],
+        help="customize output mode. Available options: wide, body. Default: body",
+        default="body",
+    )
+
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        dest="quiet",
+        action="store_const",
+        const=True,
+        help="don't print to stderr",
+        default=False,
     )
 
     return parser
@@ -184,7 +201,7 @@ def parse_exchange_name(value: str) -> ExchangeOptions:
     return ExchangeOptions(name=value)
 
 
-def parse_serializer(value: str | None) -> Serializer[object, BinaryMessage]:
+def parse_serializer(value: str | None) -> Serializer[t.Any, BinaryMessage]:
     if value is None:
         return IdentSerializer()
 
@@ -202,11 +219,25 @@ def parse_serializer(value: str | None) -> Serializer[object, BinaryMessage]:
 
             from brokrpc.serializer.protobuf import JSONProtobufSerializer
 
-            return JSONProtobufSerializer(load_class(ProtobufMessage, msg_type))
+            return JSONProtobufSerializer(Loader[ProtobufMessage]().load_class(msg_type))
 
         case _:
-            return load_instance(Serializer[Message[object], BinaryMessage], value)
+            return Loader[Serializer[t.Any, BinaryMessage]]().load_instance(value)
+
+
+async def main() -> int:
+    options = build_parser().parse_args(namespace=CLIOptions())
+
+    options.input = stdin_bytes
+    options.output = stdout_bytes
+    options.err = stderr_bytes
+    done = options.done = asyncio.Event()
+
+    for sig in (Signals.SIGINT, Signals.SIGTERM):
+        asyncio.get_running_loop().add_signal_handler(sig, done.set)
+
+    return await run(options)
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(run(parse_options(sys.argv[1:]))))
+    sys.exit(asyncio.run(main()))
