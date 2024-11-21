@@ -12,7 +12,7 @@ class MessageStorage:
     def __init__(
         self,
     ) -> None:
-        self.__messages: t.List[object] = []
+        self.__messages: list[object] = []
         self.__condition = asyncio.Condition()
 
     async def add(self, message: object) -> None:
@@ -94,8 +94,8 @@ class StubBrokerDriver(BrokerDriver):
     ) -> None:
         self.__publisher_provider = provide_publisher or self.__provide_publisher
         self.__consumer_provider = provide_consumer or self.__provide_consumer
-        self.__publishers: t.DefaultDict[PublisherOptions, t.List[BinaryPublisher]] = defaultdict(list)
-        self.__consumers: t.DefaultDict[BindingOptions, t.List[BinaryConsumer]] = defaultdict(list)
+        self.__publishers: defaultdict[PublisherOptions, list[BinaryPublisher]] = defaultdict(list)
+        self.__consumers: defaultdict[BindingOptions, list[BinaryConsumer]] = defaultdict(list)
 
     @property
     def publishers(self) -> t.Mapping[PublisherOptions, t.Sequence[BinaryPublisher]]:

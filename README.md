@@ -12,32 +12,37 @@ message brokers.
 ## key features
 
 * same protobuf structures as in gRPC
-* same unary / stream calls as in gRPC
+* similar calls as in gRPC
+  * unary-unary
+  * (TODO) unary-stream
+  * (TODO) stream-unary
+  * (TODO) stream-stream
 * declarative style, abstract from broker commands (such as declare_exchange / queue_bind)
 * publisher & consumer middlewares
 * message serializers
 
-### codegen
+## codegen
 
-(TODO) provide codegen integration with [pyprotostuben](https://github.com/zerlok/pyprotostuben)
+You can generate python code for server & client from `.proto` files. 
+The [pyprotostuben](https://github.com/zerlok/pyprotostuben) project provides protoc plugin `protoc-gen-brokrpc`. See 
+pyprotostuben project example for more details.
 
 ## supported brokers & protocols
 
 * [AMQP](https://www.rabbitmq.com/tutorials/amqp-concepts)
   * [aiormq](https://github.com/mosquito/aiormq)
+* (TODO) redis
 * (TODO) kafka
 * (TODO) NATS
 
 ## usage
 
-install with pip or poetry
+[pypi package](https://pypi.python.org/pypi/BrokRPC)
+
+install with your favorite python package manager
 
 ```shell
-pip install BrokRPC
-```
-
-```shell
-poetry add BrokRPC
+pip install BrokRPC[aiormq]
 ```
 
 ### Broker

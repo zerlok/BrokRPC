@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import inspect
 import typing as t
 import warnings
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -10,14 +11,15 @@ from functools import partial
 from signal import Signals
 
 if t.TYPE_CHECKING:
+    from concurrent.futures import Executor
     from datetime import timedelta
 
     from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer
     from brokrpc.broker import Broker
-    from brokrpc.rpc.abc import HandlerSerializer, UnaryUnaryFunc
 
 from brokrpc.options import BindingOptions, ExchangeOptions, QueueOptions, merge_options
-from brokrpc.rpc.handler import AsyncFuncHandler
+from brokrpc.rpc.abc import HandlerSerializer, UnaryUnaryHandler
+from brokrpc.rpc.handler import AsyncFuncHandler, SyncFuncHandler
 from brokrpc.rpc.model import Request, ServerError
 from brokrpc.stringify import to_str_obj
 
@@ -42,6 +44,7 @@ class ServerStartupError(ServerError, BaseExceptionGroup):
 class ServerOptions:
     startup_timeout: timedelta | None = None
     cleanup_timeout: timedelta | None = None
+    executor: Executor | None = None
 
 
 class Server:
@@ -70,11 +73,10 @@ class Server:
     def state(self) -> State:
         return self.__state
 
-    # NOTE: handler registrator function may have a lot of setup options.
-    def register_unary_unary_handler[U, V](  # noqa: PLR0913
+    def register_unary_unary_handler[U, V](
         self,
         *,
-        func: UnaryUnaryFunc[Request[U], V],
+        func: UnaryUnaryHandler[Request[U], V] | t.Callable[[Request[U]], t.Awaitable[V]] | t.Callable[[Request[U]], V],
         routing_key: str,
         serializer: HandlerSerializer[U, V],
         exchange: ExchangeOptions | None = None,
@@ -83,11 +85,33 @@ class Server:
         if self.__state is not State.IDLE:
             raise ServerNotInConfigurableStateError(self)
 
-        cm = self.__bind_consumer(
-            factory=partial(AsyncFuncHandler, func, serializer),
-            binding=self.__get_binding_options(exchange, routing_key, queue),
+        factory: t.Callable[[BinaryPublisher], BinaryConsumer]
+        match func:
+            case handler if isinstance(handler, UnaryUnaryHandler):
+                factory = partial(AsyncFuncHandler, handler.handle, serializer)
+
+            case async_func if inspect.iscoroutinefunction(async_func):
+                factory = partial(AsyncFuncHandler, async_func, serializer)
+
+            case sync_func if callable(sync_func):
+                factory = partial(
+                    SyncFuncHandler,
+                    t.cast(t.Callable[[Request[U]], V], sync_func),
+                    serializer,
+                    executor=self.__options.executor if self.__options is not None else None,
+                )
+
+            case _:
+                # TODO: make `t.assert_never` work
+                details = "invalid func type"
+                raise TypeError(details, func)
+
+        self.__handlers.append(
+            self.__bind_consumer(
+                factory=factory,
+                binding=self.__get_binding_options(exchange, routing_key, queue),
+            )
         )
-        self.__handlers.append(cm)
 
     async def start(self) -> None:
         async with self.__lock:

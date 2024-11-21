@@ -35,6 +35,13 @@ class BrokerOptions(RetryOptions):
 
 
 @dataclass(frozen=True, kw_only=True)
+class BrokerEntityOptions:
+    mode: t.Literal["soft", "strict"] | None = None
+    create_if_not_exist: bool | None = None
+    name: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
 class QOSOptions:
     prefetch_count: int | None = None
 
@@ -45,8 +52,7 @@ class QOSOptions:
 
 
 @dataclass(frozen=True, kw_only=True)
-class ExchangeOptions(QOSOptions):
-    name: str | None = None
+class ExchangeOptions(BrokerEntityOptions, QOSOptions):
     type: ExchangeType | None = None
     durable: bool | None = None
     auto_delete: bool | None = None
@@ -54,8 +60,7 @@ class ExchangeOptions(QOSOptions):
 
 
 @dataclass(frozen=True, kw_only=True)
-class QueueOptions(QOSOptions):
-    name: str | None = None
+class QueueOptions(BrokerEntityOptions, QOSOptions):
     durable: bool | None = None
     exclusive: bool | None = None
     auto_delete: bool | None = None

@@ -7,11 +7,11 @@ import pytest
 # FIXME: find a way to import Parser
 # NOTE: fixes strange error `Module "_pytest.config" does not explicitly export attribute "Parser"`.
 from _pytest.config import Config, Parser  # type: ignore[attr-defined]
+from yarl import URL
+
 from brokrpc.abc import BrokerDriver
 from brokrpc.broker import Broker
 from brokrpc.options import BrokerOptions
-from yarl import URL
-
 from tests.stub.driver import StubBrokerDriver, StubConsumer
 
 
@@ -71,22 +71,22 @@ def parse_broker_options(config: Config) -> BrokerOptions:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def broker_driver() -> StubBrokerDriver:
     return StubBrokerDriver()
 
 
-@pytest.fixture()
+@pytest.fixture
 def broker(broker_driver: BrokerDriver) -> Broker:
     return Broker(nullcontext(broker_driver))
 
 
-@pytest.fixture()
+@pytest.fixture
 async def connected_broker(broker: Broker) -> t.AsyncIterator[Broker]:
     async with broker:
         yield broker
 
 
-@pytest.fixture()
+@pytest.fixture
 def stub_consumer() -> StubConsumer:
     return StubConsumer()

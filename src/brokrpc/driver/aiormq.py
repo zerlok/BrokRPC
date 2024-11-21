@@ -4,7 +4,7 @@ import asyncio
 import typing as t
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from aiormq import Channel, Connection, ProtocolSyntaxError, spec
@@ -360,7 +360,7 @@ class AiormqBrokerDriver(BrokerDriver):
         return uuid4().hex
 
     def __get_now(self) -> datetime:
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
 
 
 def _load_message_timeout(value: str | None) -> timedelta | None:
