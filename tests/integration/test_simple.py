@@ -4,6 +4,7 @@ from dataclasses import asdict
 
 import pytest
 from _pytest.fixtures import SubRequest
+
 from brokrpc.abc import BinaryPublisher, Publisher, Serializer
 from brokrpc.broker import Broker
 from brokrpc.message import AppMessage, Message
@@ -11,7 +12,6 @@ from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, Q
 from brokrpc.rpc.abc import Caller, RPCSerializer
 from brokrpc.rpc.client import Client
 from brokrpc.rpc.server import Server
-
 from tests.stub.proto.greeting_pb2 import GreetingRequest, GreetingResponse
 from tests.stub.simple import GreetingHandler, ReceiveWaiter, ReceiveWaiterConsumer
 
@@ -40,7 +40,7 @@ async def test_rpc_handles_request(
     assert response.body.result == receive_waiter.process_value(protobuf_request.name)
 
 
-@pytest.fixture()
+@pytest.fixture
 def receive_waiter(event_loop: asyncio.AbstractEventLoop) -> ReceiveWaiter:
     return ReceiveWaiter(event_loop)
 
@@ -75,7 +75,7 @@ def receive_waiter_handler(
     return factory(receive_waiter)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def consumer(
     rabbitmq_broker: Broker,
     receive_waiter_consumer: ReceiveWaiterConsumer,
@@ -86,7 +86,7 @@ async def consumer(
         yield receive_waiter_consumer
 
 
-@pytest.fixture()
+@pytest.fixture
 async def publisher(
     rabbitmq_broker: Broker,
     json_serializer: Serializer[Message[object], Message[bytes]],
@@ -96,7 +96,7 @@ async def publisher(
         yield pub
 
 
-@pytest.fixture()
+@pytest.fixture
 def greeting_handler(
     routing_key: str,
     binding_options: BindingOptions,
@@ -115,7 +115,7 @@ def greeting_handler(
     return receive_waiter_handler
 
 
-@pytest.fixture()
+@pytest.fixture
 async def caller(
     exchange: ExchangeOptions,
     routing_key: str,
@@ -130,17 +130,17 @@ async def caller(
         yield caller
 
 
-@pytest.fixture()
+@pytest.fixture
 def exchange() -> ExchangeOptions:
     return ExchangeOptions(name="simple-test", auto_delete=True)
 
 
-@pytest.fixture()
+@pytest.fixture
 def publisher_options(exchange: ExchangeOptions) -> PublisherOptions:
     return PublisherOptions(**asdict(exchange))
 
 
-@pytest.fixture()
+@pytest.fixture
 def binding_options(publisher_options: PublisherOptions, routing_key: str) -> BindingOptions:
     return BindingOptions(
         exchange=publisher_options,
@@ -151,12 +151,12 @@ def binding_options(publisher_options: PublisherOptions, routing_key: str) -> Bi
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def routing_key() -> str:
     return "test-simple"
 
 
-@pytest.fixture()
+@pytest.fixture
 def json_message(json_content: object, routing_key: str) -> Message[object]:
     return AppMessage(body=json_content, routing_key=routing_key)
 

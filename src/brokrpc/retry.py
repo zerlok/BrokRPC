@@ -128,7 +128,7 @@ class Retryer:
                     if attempt.ok:
                         return
 
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             errors.append(err)
 
         raise NoMoreAttemptsError(no_more_attempts_message, errors)

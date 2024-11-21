@@ -168,6 +168,6 @@ def pack_any(msg: ProtobufMessage) -> Any:
     return result
 
 
-def unpack_any[T: ProtobufMessage](msg_type: t.Type[T], value: Any) -> tuple[bool, T]:
+def unpack_any[T: ProtobufMessage](msg_type: type[T], value: Any) -> tuple[bool, T]:
     msg = msg_type()
     return value.Unpack(msg), msg

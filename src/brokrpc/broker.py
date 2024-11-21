@@ -37,8 +37,7 @@ class BrokerIsNotConnectedError(BrokerError):
 
 
 class Broker(t.AsyncContextManager["Broker"]):
-    # NOTE: broker is a high level API class, constructor provides configuring it with different options
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         options: BrokerConnectOptions,
         *,

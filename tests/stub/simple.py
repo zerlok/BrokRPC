@@ -6,7 +6,6 @@ from brokrpc.message import Message
 from brokrpc.model import ConsumerResult
 from brokrpc.rpc.abc import UnaryUnaryHandler
 from brokrpc.rpc.model import Request
-
 from tests.stub.proto.greeting_pb2 import GreetingRequest, GreetingResponse
 
 type ReceiveWaiterConsumer = (

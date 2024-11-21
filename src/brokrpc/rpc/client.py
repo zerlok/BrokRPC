@@ -16,16 +16,16 @@ class Client:
     def __init__(self, broker: Broker) -> None:
         self.__broker = broker
 
-    # NOTE: caller provider function may have a lot of setup options.
     @asynccontextmanager
-    async def unary_unary_caller[U, V](  # noqa: PLR0913
+    async def unary_unary_caller[U, V](
         self,
         *,
         routing_key: str,
         serializer: CallerSerializer[U, V],
         exchange: ExchangeOptions | None = None,
         queue: QueueOptions | None = None,
-        timeout: timedelta | None = None,
+        # NOTE: `timeout` parameter passed to server via message, so server can cancel the task if it is expired.
+        timeout: timedelta | None = None,  # noqa: ASYNC109
     ) -> t.AsyncIterator[Caller[U, V]]:
         caller_id = uuid.uuid4()
         response_key = f"response.{routing_key}.{caller_id.hex}"

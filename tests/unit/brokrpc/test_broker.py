@@ -1,8 +1,8 @@
 import pytest
+
 from brokrpc.abc import BrokerDriver
 from brokrpc.broker import Broker, BrokerIsNotConnectedError
 from brokrpc.options import BindingOptions
-
 from tests.stub.driver import StubConsumer
 
 
@@ -49,7 +49,7 @@ async def test_not_connected_broker_cant_register_consumer(
             pass
 
 
-@pytest.fixture()
+@pytest.fixture
 def not_connected_broker(broker: Broker) -> Broker:
     assert not broker.is_connected
     return broker

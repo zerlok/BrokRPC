@@ -73,8 +73,7 @@ class Server:
     def state(self) -> State:
         return self.__state
 
-    # NOTE: handler registrator function may have a lot of setup options.
-    def register_unary_unary_handler[U, V](  # noqa: PLR0913
+    def register_unary_unary_handler[U, V](
         self,
         *,
         func: UnaryUnaryHandler[Request[U], V] | t.Callable[[Request[U]], t.Awaitable[V]] | t.Callable[[Request[U]], V],
