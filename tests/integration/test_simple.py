@@ -8,35 +8,36 @@ from brokrpc.abc import BinaryPublisher, Publisher, Serializer
 from brokrpc.broker import Broker
 from brokrpc.message import AppMessage, Message
 from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
-from brokrpc.rpc.abc import Caller, CallerSerializer, RPCSerializer
+from brokrpc.rpc.abc import Caller, RPCSerializer
 from brokrpc.rpc.client import Client
 from brokrpc.rpc.server import Server
 
-from tests.stub.simple import ReceiveWaiter, ReceiveWaiterConsumer, ReceiveWaiterHandler
+from tests.stub.proto.greeting_pb2 import GreetingRequest, GreetingResponse
+from tests.stub.simple import GreetingHandler, ReceiveWaiter, ReceiveWaiterConsumer
 
 
 async def test_consumer_receives_published_message(
     receive_waiter: ReceiveWaiter,
     consumer: object,
     publisher: Publisher[object, object],
-    message: Message[object],
+    json_message: Message[object],
 ) -> None:
-    await publisher.publish(message)
+    await publisher.publish(json_message)
     received_message = await receive_waiter.wait()
 
-    assert received_message.body == message.body
+    assert received_message.body == json_message.body
 
 
 async def test_rpc_handles_request(
     receive_waiter: ReceiveWaiter,
-    handler: ReceiveWaiterHandler,
-    caller: Caller[object, object],
+    greeting_handler: GreetingHandler,
+    caller: Caller[GreetingRequest, GreetingResponse],
     running_rpc_server: Server,
-    content: object,
+    protobuf_request: GreetingRequest,
 ) -> None:
-    response = await caller.invoke(content)
+    response = await caller.invoke(protobuf_request)
 
-    assert response.body == receive_waiter.process_value(content)
+    assert response.body.result == receive_waiter.process_value(protobuf_request.name)
 
 
 @pytest.fixture()
@@ -61,15 +62,16 @@ def receive_waiter_consumer(
 
 @pytest.fixture(
     params=[
+        pytest.param(ReceiveWaiter.handler_sync),
         pytest.param(ReceiveWaiter.handler_async),
-        # TODO: support ReceiveWaiter.handler_sync & ReceiveWaiter.handler_impl
+        pytest.param(ReceiveWaiter.handler_impl),
     ],
 )
 def receive_waiter_handler(
     request: SubRequest,
     receive_waiter: ReceiveWaiter,
-) -> ReceiveWaiterHandler:
-    factory = t.cast(t.Callable[[ReceiveWaiter], ReceiveWaiterHandler], request.param)
+) -> GreetingHandler:
+    factory = t.cast(t.Callable[[ReceiveWaiter], GreetingHandler], request.param)
     return factory(receive_waiter)
 
 
@@ -95,17 +97,17 @@ async def publisher(
 
 
 @pytest.fixture()
-def handler(
+def greeting_handler(
     routing_key: str,
     binding_options: BindingOptions,
     rpc_server: Server,
-    json_serializer: RPCSerializer[object, object],
-    receive_waiter_handler: ReceiveWaiterHandler,
-) -> ReceiveWaiterHandler:
+    rpc_greeting_serializer: RPCSerializer[GreetingRequest, GreetingResponse],
+    receive_waiter_handler: GreetingHandler,
+) -> GreetingHandler:
     rpc_server.register_unary_unary_handler(
         func=receive_waiter_handler,
         routing_key=routing_key,
-        serializer=json_serializer,
+        serializer=rpc_greeting_serializer,
         exchange=binding_options.exchange,
         queue=binding_options.queue,
     )
@@ -118,11 +120,11 @@ async def caller(
     exchange: ExchangeOptions,
     routing_key: str,
     rpc_client: Client,
-    json_serializer: CallerSerializer[object, object],
-) -> t.AsyncIterator[Caller[object, object]]:
+    rpc_greeting_serializer: RPCSerializer[GreetingRequest, GreetingResponse],
+) -> t.AsyncIterator[Caller[GreetingRequest, GreetingResponse]]:
     async with rpc_client.unary_unary_caller(
         routing_key=routing_key,
-        serializer=json_serializer,
+        serializer=rpc_greeting_serializer,
         exchange=exchange,
     ) as caller:
         yield caller
@@ -155,8 +157,8 @@ def routing_key() -> str:
 
 
 @pytest.fixture()
-def message(content: object, routing_key: str) -> Message[object]:
-    return AppMessage(body=content, routing_key=routing_key)
+def json_message(json_content: object, routing_key: str) -> Message[object]:
+    return AppMessage(body=json_content, routing_key=routing_key)
 
 
 @pytest.fixture(
@@ -166,5 +168,15 @@ def message(content: object, routing_key: str) -> Message[object]:
         pytest.param({"foo": "bar"}),
     ]
 )
-def content(request: SubRequest) -> object:
+def json_content(request: SubRequest) -> object:
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(GreetingRequest(name="John")),
+        pytest.param(GreetingRequest(name="Bob")),
+    ]
+)
+def protobuf_request(request: SubRequest) -> object:
     return request.param

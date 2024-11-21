@@ -5,11 +5,14 @@ import pytest
 from _pytest.fixtures import SubRequest
 from brokrpc.broker import Broker
 from brokrpc.options import BrokerOptions
+from brokrpc.rpc.abc import RPCSerializer
 from brokrpc.rpc.client import Client
 from brokrpc.rpc.server import Server
 from brokrpc.serializer.json import JSONSerializer
+from brokrpc.serializer.protobuf import RPCProtobufSerializer
 
 from tests.conftest import parse_broker_options
+from tests.stub.proto.greeting_pb2 import GreetingRequest, GreetingResponse
 
 
 @pytest.fixture(
@@ -49,3 +52,8 @@ def rpc_client(rabbitmq_broker: Broker) -> Client:
 @pytest.fixture()
 def json_serializer() -> JSONSerializer:
     return JSONSerializer()
+
+
+@pytest.fixture()
+def rpc_greeting_serializer() -> RPCSerializer[GreetingRequest, GreetingResponse]:
+    return RPCProtobufSerializer(GreetingRequest, GreetingResponse)

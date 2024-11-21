@@ -225,7 +225,7 @@ def parse_serializer(value: str | None) -> Serializer[t.Any, BinaryMessage]:
             return Loader[Serializer[t.Any, BinaryMessage]]().load_instance(value)
 
 
-async def main() -> int:
+def main() -> None:
     options = build_parser().parse_args(namespace=CLIOptions())
 
     options.input = stdin_bytes
@@ -234,10 +234,10 @@ async def main() -> int:
     done = options.done = asyncio.Event()
 
     for sig in (Signals.SIGINT, Signals.SIGTERM):
-        asyncio.get_running_loop().add_signal_handler(sig, done.set)
+        asyncio.get_event_loop().add_signal_handler(sig, done.set)
 
-    return await run(options)
+    sys.exit(asyncio.run(run(options)))
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    main()

@@ -1,13 +1,12 @@
 import abc
-import typing as t
 
 from brokrpc.rpc.model import BinaryRequest, BinaryResponse, Request, Response
 
-type UnaryUnaryFunc[U, V] = t.Callable[[U], t.Awaitable[V]]
-type UnaryStreamFunc[U, V] = t.Callable[[U], t.AsyncIterable[V]]
-type StreamUnaryFunc[U, V] = t.Callable[[t.AsyncIterator[U]], t.Awaitable[V]]
-type StreamStreamFunc[U, V] = t.Callable[[t.AsyncIterator[U]], t.AsyncIterable[V]]
-type HandlerFunc[U, V] = UnaryUnaryFunc[U, V] | UnaryStreamFunc[U, V] | StreamUnaryFunc[U, V] | StreamStreamFunc[U, V]
+
+class UnaryUnaryHandler[U, V](metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    async def handle(self, request: U) -> V:
+        raise NotImplementedError
 
 
 class Caller[U, V](metaclass=abc.ABCMeta):

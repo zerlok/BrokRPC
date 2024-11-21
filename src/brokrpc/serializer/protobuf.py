@@ -8,6 +8,8 @@ from google.protobuf.message import Message as ProtobufMessage
 from brokrpc.abc import Serializer
 from brokrpc.message import BinaryMessage, Message, PackedMessage, UnpackedMessage
 from brokrpc.model import SerializerDumpError, SerializerLoadError
+from brokrpc.rpc.abc import RPCSerializer
+from brokrpc.rpc.model import BinaryRequest, BinaryResponse, Request, Response
 from brokrpc.serializer.json import JSONSerializer
 
 
@@ -140,6 +142,24 @@ class JSONProtobufSerializer[T: ProtobufMessage](Serializer[Message[bytes], Mess
 
     def __check_json_message(self, obj: object) -> t.TypeGuard[dict[str, object]]:
         return isinstance(obj, dict) and all(isinstance(key, str) for key in obj)
+
+
+class RPCProtobufSerializer[U: ProtobufMessage, V: ProtobufMessage](RPCSerializer[U, V]):
+    def __init__(self, request_type: type[U], response_type: type[V]) -> None:
+        self.__request = ProtobufSerializer(request_type)
+        self.__response = ProtobufSerializer(response_type)
+
+    def dump_unary_request(self, request: Request[U]) -> BinaryRequest:
+        return self.__request.dump_message(request)
+
+    def load_unary_request(self, request: BinaryRequest) -> Request[U]:
+        return self.__request.load_message(request)
+
+    def dump_unary_response(self, response: Response[V]) -> BinaryResponse:
+        return self.__response.dump_message(response)
+
+    def load_unary_response(self, response: BinaryResponse) -> Response[V]:
+        return self.__response.load_message(response)
 
 
 def pack_any(msg: ProtobufMessage) -> Any:
