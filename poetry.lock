@@ -170,7 +170,7 @@ name = "idna"
 version = "3.10"
 description = "Internationalized Domain Names in Applications (IDNA)"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.6"
 files = [
     {file = "idna-3.10-py3-none-any.whl", hash = "sha256:946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3"},
@@ -323,7 +323,7 @@ name = "multidict"
 version = "6.1.0"
 description = "multidict implementation"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "multidict-6.1.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:3380252550e372e8511d49481bd836264c009adb826b23fefcc5dd3c69692f60"},
@@ -534,7 +534,7 @@ name = "propcache"
 version = "0.2.0"
 description = "Accelerated property cache"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "propcache-0.2.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:c5869b8fd70b81835a6f187c5fdbe67917a04d7e52b6e7cc4e5fe39d55c39d58"},
@@ -1134,7 +1134,7 @@ name = "yarl"
 version = "1.18.0"
 description = "Yet another URL library"
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.9"
 files = [
     {file = "yarl-1.18.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:074fee89caab89a97e18ef5f29060ef61ba3cae6cd77673acc54bfdd3214b7b7"},
@@ -1234,4 +1234,4 @@ protobuf = ["googleapis-common-protos", "protobuf"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "377429bd24b8f1b088cc9611e6da9b26f5183c076d370e0cea70972bd16b9130"
+content-hash = "5d93bfcdb23a370b02ea2611ff6c1cccb3e6dd606553d5debed601cf578129d6"
