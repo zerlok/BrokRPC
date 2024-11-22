@@ -115,11 +115,11 @@ asyncio_default_fixture_loop_scope = "function"
 branch = true
 
 [tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "@abc.abstractmethod",
+exclude_also = [
     "if __name__ == .__main__.:",
-    "if t.TYPE_CHECKING:",
-    "t.assert_never(.*)",
+    "if t\\.TYPE_CHECKING:",
+    "class .*\\(t\\.Protocol\\):",
+    "@abc\\.abstractmethod",
+    "t\\.assert_never\\(.*\\)",
 ]
 show_missing = true

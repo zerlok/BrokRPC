@@ -25,7 +25,7 @@ async def main() -> None:
         Broker(
             options="amqp://guest:guest@localhost:5672/",
             default_exchange=ExchangeOptions(name="simple-test-app"),
-            default_consumer_middlewares=[RetryOnErrorConsumerMiddleware(timedelta(seconds=3.0), (Exception,))],
+            default_consumer_middlewares=[RetryOnErrorConsumerMiddleware((Exception,), timedelta(seconds=3.0))],
         ) as broker,
         # start app consumer
         broker.consumer(

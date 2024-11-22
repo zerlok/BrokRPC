@@ -1,3 +1,4 @@
+import abc
 import asyncio
 import sys
 import typing as t
@@ -7,7 +8,6 @@ from signal import Signals
 from uuid import uuid4
 
 from aiofiles import stderr_bytes, stdin_bytes, stdout_bytes
-from aiofiles.threadpool.binary import AsyncIndirectBufferedIOBase
 from yarl import URL
 
 from brokrpc.abc import Serializer
@@ -19,6 +19,32 @@ from brokrpc.plugin import Loader
 from brokrpc.serializer.ident import IdentSerializer
 
 
+class AsyncStream(t.Protocol):
+    @abc.abstractmethod
+    def __aiter__(self) -> t.AsyncIterator[bytes]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def __anext__(self) -> bytes:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def readlines(self) -> t.Sequence[bytes]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def write(self, _: bytes, /) -> int:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def flush(self) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def close(self) -> None:
+        raise NotImplementedError
+
+
 class CLIOptions:
     url: URL
     exchange: ExchangeOptions | None
@@ -27,9 +53,9 @@ class CLIOptions:
     serializer: Serializer[Message[object], BinaryMessage]
     output_mode: t.Literal["wide", "body"]
     quiet: bool
-    input: AsyncIndirectBufferedIOBase
-    output: AsyncIndirectBufferedIOBase
-    err: AsyncIndirectBufferedIOBase
+    input: AsyncStream
+    output: AsyncStream
+    err: AsyncStream
     done: asyncio.Event
 
     def __str__(self) -> str:
@@ -71,7 +97,7 @@ async def run_consumer(broker: Broker, options: CLIOptions) -> int:
             exchange=options.exchange,
             binding_keys=[options.routing_key],
             queue=QueueOptions(
-                name=f"{__name__}.{uuid4().hex}",
+                name=f"{__package__}.{uuid4().hex}",
                 exclusive=True,
                 auto_delete=True,
                 prefetch_count=1,
@@ -115,12 +141,12 @@ async def run_publisher(broker: Broker, options: CLIOptions) -> int:
         return 0
 
 
-async def consume_message(out: AsyncIndirectBufferedIOBase, message: Message[object]) -> None:
+async def consume_message(out: AsyncStream, message: Message[object]) -> None:
     await out.write(f"{message!r}\n".encode())
     await out.flush()
 
 
-async def consume_message_body(out: AsyncIndirectBufferedIOBase, message: Message[bytes]) -> None:
+async def consume_message_body(out: AsyncStream, message: Message[bytes]) -> None:
     await out.write(message.body + b"\n")
     await out.flush()
 
@@ -233,10 +259,13 @@ def main() -> None:
     options.err = stderr_bytes
     done = options.done = asyncio.Event()
 
-    for sig in (Signals.SIGINT, Signals.SIGTERM):
-        asyncio.get_event_loop().add_signal_handler(sig, done.set)
+    async def _main() -> int:
+        for sig in (Signals.SIGINT, Signals.SIGTERM):
+            asyncio.get_running_loop().add_signal_handler(sig, done.set)
 
-    sys.exit(asyncio.run(run(options)))
+        return await run(options)
+
+    sys.exit(asyncio.run(_main()))
 
 
 if __name__ == "__main__":

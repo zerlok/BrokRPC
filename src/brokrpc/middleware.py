@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
-
-if t.TYPE_CHECKING:
-    from datetime import timedelta
+from datetime import timedelta
 
 from brokrpc.abc import Consumer, ConsumerMiddleware, Publisher, PublisherMiddleware
 from brokrpc.model import (
