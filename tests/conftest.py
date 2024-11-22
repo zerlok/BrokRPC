@@ -12,6 +12,7 @@ from yarl import URL
 from brokrpc.abc import BrokerDriver
 from brokrpc.broker import Broker
 from brokrpc.options import BrokerOptions
+from brokrpc.retry import ConstantDelay, DelayRetryStrategy, ExponentialDelay, MultiplierDelay
 from tests.stub.driver import StubBrokerDriver, StubConsumer
 
 
@@ -63,12 +64,37 @@ def parse_broker_options(config: Config) -> BrokerOptions:
     return BrokerOptions(
         url=config.getoption("broker_url"),
         driver=config.getoption("broker_driver"),
-        retry_delay=config.getoption("broker_retry_delay"),
-        retry_delay_mode=config.getoption("broker_retry_delay_mode"),
-        retry_max_delay=config.getoption("broker_retry_max_delay"),
+        retry_delay=parse_retry_delay_strategy(config),
         retries_timeout=config.getoption("broker_retries_timeout"),
         retries_limit=config.getoption("broker_retries_limit"),
     )
+
+
+def parse_retry_delay_strategy(config: Config) -> DelayRetryStrategy | None:
+    match mode := config.getoption("broker_retry_delay_mode"):
+        case "constant":
+            return ConstantDelay(
+                delay=config.getoption("broker_retry_delay"),
+            )
+
+        case "multiplier":
+            return MultiplierDelay(
+                delay=config.getoption("broker_retry_delay"),
+                max_delay=config.getoption("broker_retry_max_delay"),
+            )
+
+        case "exponential":
+            return ExponentialDelay(
+                delay=config.getoption("broker_retry_delay"),
+                max_delay=config.getoption("broker_retry_max_delay"),
+            )
+
+        case None:
+            return None
+
+        case _:
+            details = "unknown mode"
+            raise ValueError(details, mode)
 
 
 @pytest.fixture

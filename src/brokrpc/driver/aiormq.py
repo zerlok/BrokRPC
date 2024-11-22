@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import typing as t
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -10,7 +11,7 @@ from uuid import uuid4
 from aiormq import Channel, Connection, ProtocolSyntaxError, spec
 from pamqp.common import FieldTable
 
-from brokrpc.retry import Retryer
+from brokrpc.retry import create_delay_retryer
 from brokrpc.stringify import to_str_obj
 
 if t.TYPE_CHECKING:
@@ -216,17 +217,19 @@ class AiormqBrokerDriver(BrokerDriver):
     @classmethod
     @asynccontextmanager
     async def connect(cls, options: BrokerOptions) -> t.AsyncIterator[AiormqBrokerDriver]:
-        conn = Connection(options.url)
+        def log_warning(err: Exception) -> None:
+            logging.warning("can't connect to rabbitmq", exc_info=err)
 
+        retryer = create_delay_retryer(
+            options=options,
+            errors=(ConnectionError, ProtocolSyntaxError),
+            on_attempt_error=log_warning,
+        )
+
+        conn = Connection(options.url)
         try:
-            await (
-                Retryer(options)
-                .bind(
-                    retry_on_exceptions=(ConnectionError, ProtocolSyntaxError),
-                    no_more_attempts_message="can't connect to rabbitmq",
-                )
-                .do(conn.connect)
-            )
+            await retryer.do(conn.connect)
+
             yield cls(conn)
 
         finally:

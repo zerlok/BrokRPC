@@ -1,58 +1,25 @@
 from __future__ import annotations
 
+import abc
 import asyncio
 import typing as t
-
-if t.TYPE_CHECKING:
-    from datetime import timedelta
-
+from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass
-from itertools import count
+from datetime import timedelta
+from math import inf
 
 
-@dataclass(frozen=True, kw_only=True)
-class RetryOptions:
-    retry_delay_mode: t.Literal["constant", "multiplier", "exponential"] | None = None
-    retry_delay: timedelta | None = None
-    retry_max_delay: timedelta | None = None
-    retries_timeout: timedelta | None = None
-    retries_limit: int | None = None
+class Attempt[T]:
+    __NOT_SET: t.Final[object] = object()
 
-    def __post_init__(self) -> None:
-        if self.retry_delay is not None and self.retry_delay.total_seconds() < 0.0:
-            details = "retry delay must be greater than or equal to 0"
-            raise ValueError(details, self)
-
-        if self.retry_max_delay is not None and self.retry_max_delay.total_seconds() < 0.0:
-            details = "retry max delay must be greater than or equal to 0"
-            raise ValueError(details, self)
-
-        if self.retries_timeout is not None and self.retries_timeout.total_seconds() <= 0.0:
-            details = "retries timeout must be greater than 0"
-            raise ValueError(details, self)
-
-        if self.retries_limit is not None and self.retries_limit < 0:
-            details = "retries limit must be greater than or equal to 0"
-            raise ValueError(details, self)
-
-        if (
-            self.retry_max_delay is not None
-            and self.retry_delay is not None
-            and self.retry_delay > self.retry_max_delay
-        ):
-            details = "retry delay must be less than or equal to retry max delay"
-            raise ValueError(details, self)
-
-
-class Attempt:
     def __init__(self, n: int, errors: list[Exception]) -> None:
         self.__n = n
         self.__errors = errors
-        self.__ok: bool | None = None
+        self.__result = self.__NOT_SET
 
     @property
-    def ok(self) -> bool | None:
-        return self.__ok
+    def ok(self) -> bool:
+        return self.__result is not self.__NOT_SET
 
     @property
     def num(self) -> int:
@@ -62,19 +29,26 @@ class Attempt:
     def is_retry(self) -> bool:
         return self.__n > 0
 
-    def set_failed(self, err: Exception | None) -> None:
-        if self.__ok is not None:
-            return
+    @property
+    def last_error(self) -> Exception | None:
+        return self.__errors[-1] if self.__errors else None
 
-        self.__ok = False
+    def result(self) -> T:
+        if self.__result is self.__NOT_SET:
+            raise RuntimeError
+
+        # NOTE: if result is not __NOT_SET, then it is of type T
+        return t.cast(T, self.__result)
+
+    def set_error(self, err: Exception | None) -> None:
         if err is not None:
             self.__errors.append(err)
 
-    def set_succeeded(self) -> None:
-        if self.__ok is not None:
-            return
+    def set_result(self, result: T) -> None:
+        if self.__result is not self.__NOT_SET:
+            raise RuntimeError
 
-        self.__ok = True
+        self.__result = result
 
 
 class RetryerError(Exception):
@@ -85,123 +59,314 @@ class NoMoreAttemptsError(ExceptionGroup, RetryerError):
     pass
 
 
-class BoundRetryer:
+class AttemptsTimeoutError(ExceptionGroup, RetryerError):
+    pass
+
+
+class DelayRetryStrategy(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def calc_delay(self, i: int) -> timedelta:
+        raise NotImplementedError
+
+
+class ConstantDelay(DelayRetryStrategy):
+    def __init__(self, delay: timedelta) -> None:
+        self.__delay = delay
+
+    def calc_delay(self, _: int) -> timedelta:
+        return self.__delay
+
+
+class MultiplierDelay(DelayRetryStrategy):
     def __init__(
         self,
-        retryer: Retryer,
-        retry_on_exceptions: tuple[type[Exception], ...],
-        no_more_attempts_message: str,
+        delay: timedelta,
+        max_delay: timedelta | None = None,
     ) -> None:
-        self.__retryer = retryer
-        self.__retry_on_exceptions = retry_on_exceptions
-        self.__no_more_attempts_message = no_more_attempts_message
+        self.__delay = delay.total_seconds()
+        self.__max_delay = max_delay.total_seconds() if max_delay is not None else inf
 
-    async def do[**U, V](self, func: t.Callable[U, t.Awaitable[V]], *args: U.args, **kwargs: U.kwargs) -> V:
-        async for attempt in self.__retryer.iterate(self.__no_more_attempts_message):
-            try:
-                result = await func(*args, **kwargs)
+    def calc_delay(self, i: int) -> timedelta:
+        return timedelta(seconds=min(i * self.__delay, self.__max_delay))
 
-            except self.__retry_on_exceptions as err:
-                attempt.set_failed(err)
 
-            else:
-                attempt.set_succeeded()
-                return result
+class ExponentialDelay(DelayRetryStrategy):
+    def __init__(
+        self,
+        delay: timedelta,
+        base: float | None = None,
+        max_delay: timedelta | None = None,
+    ) -> None:
+        self.__delay = delay.total_seconds()
+        self.__base = base if base is not None else 2.0
+        self.__max_delay = max_delay.total_seconds() if max_delay is not None else inf
 
-        # NOTE: it's always at least one attempt.
-        raise RuntimeError
+    def calc_delay(self, i: int) -> timedelta:
+        return timedelta(seconds=min(self.__delay * self.__base ** (i - 1), self.__max_delay))
+
+
+class RetryStrategy(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def is_attempt_limit_reached[V](self, attempt: Attempt[V]) -> bool:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def try_attempt[**U, V](
+        self,
+        attempt: Attempt[V],
+        func: t.Callable[U, t.Awaitable[V]],
+        args: U.args,
+        kwargs: U.kwargs,
+    ) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def on_attempt_error[**U, V](
+        self,
+        func: t.Callable[U, t.Awaitable[V]],
+        args: U.args,
+        kwargs: U.kwargs,
+        error: Exception,
+    ) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def on_attempt_limit_reached[**U, V](
+        self,
+        func: t.Callable[U, t.Awaitable[V]],
+        args: U.args,
+        kwargs: U.kwargs,
+        errors: t.Sequence[Exception],
+    ) -> Exception | None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def on_timeout_reached[**U, V](
+        self,
+        func: t.Callable[U, t.Awaitable[V]],
+        args: U.args,
+        kwargs: U.kwargs,
+        errors: t.Sequence[Exception],
+    ) -> Exception | None:
+        raise NotImplementedError
+
+
+class DelayingRetryStrategy(RetryStrategy):
+    def __init__(
+        self,
+        *,
+        delay: DelayRetryStrategy,
+        errors: t.Sequence[type[Exception]],
+        on_attempt_error: t.Callable[[Exception], None] | None = None,
+        attempt_limit: int | None = None,
+    ) -> None:
+        self.__delay = delay
+        self.__errors = tuple(errors)
+        self.__on_attempt_error = on_attempt_error
+        self.__attempt_limit = attempt_limit
+
+    def is_attempt_limit_reached[V](self, attempt: Attempt[V]) -> bool:
+        return self.__attempt_limit is not None and attempt.num > self.__attempt_limit
+
+    async def try_attempt[**U, V](
+        self,
+        attempt: Attempt[V],
+        func: t.Callable[U, t.Awaitable[V]],
+        args: U.args,
+        kwargs: U.kwargs,
+    ) -> None:
+        if attempt.is_retry and (delay := self.__delay.calc_delay(attempt.num).total_seconds()) > 0:
+            await asyncio.sleep(delay)
+
+        try:
+            result = await func(*args, **kwargs)
+
+        except self.__errors as err:
+            attempt.set_error(err)
+
+        else:
+            attempt.set_result(result)
+
+    def on_attempt_error[**U, V](
+        self,
+        _func: t.Callable[U, t.Awaitable[V]],
+        _args: U.args,
+        _kwargs: U.kwargs,
+        error: Exception,
+    ) -> None:
+        if self.__on_attempt_error is not None:
+            self.__on_attempt_error(error)
+
+    def on_attempt_limit_reached[**U, V](
+        self,
+        _func: t.Callable[U, t.Awaitable[V]],
+        _args: U.args,
+        _kwargs: U.kwargs,
+        _errors: t.Sequence[Exception],
+    ) -> Exception | None:
+        return None
+
+    def on_timeout_reached[**U, V](
+        self,
+        _func: t.Callable[U, t.Awaitable[V]],
+        _args: U.args,
+        _kwargs: U.kwargs,
+        _errors: t.Sequence[Exception],
+    ) -> Exception | None:
+        return None
+
+
+class NoRetryStrategy(RetryStrategy):
+    def is_attempt_limit_reached[V](self, attempt: Attempt[V]) -> bool:
+        return attempt.is_retry
+
+    async def try_attempt[**U, V](
+        self,
+        attempt: Attempt[V],
+        func: t.Callable[U, t.Awaitable[V]],
+        args: U.args,
+        kwargs: U.kwargs,
+    ) -> None:
+        attempt.set_result(await func(*args, **kwargs))
+
+    def on_attempt_error[**U, V](
+        self,
+        func: t.Callable[U, t.Awaitable[V]],
+        args: U.args,
+        kwargs: U.kwargs,
+        error: Exception,
+    ) -> None:
+        pass
+
+    def on_attempt_limit_reached[**U, V](
+        self,
+        _func: t.Callable[U, t.Awaitable[V]],
+        _args: U.args,
+        _kwargs: U.kwargs,
+        _errors: t.Sequence[Exception],
+    ) -> Exception | None:
+        return None
+
+    def on_timeout_reached[**U, V](
+        self,
+        _func: t.Callable[U, t.Awaitable[V]],
+        _args: U.args,
+        _kwargs: U.kwargs,
+        _errors: t.Sequence[Exception],
+    ) -> Exception | None:
+        return None
 
 
 class Retryer:
-    def __init__(self, options: RetryOptions) -> None:
-        self.__options = options
+    def __init__(self, strategy: t.Callable[[], t.AsyncContextManager[RetryStrategy]]) -> None:
+        self.__strategy = strategy
 
-    async def iterate(self, no_more_attempts_message: str) -> t.AsyncIterator[Attempt]:
+    async def do[**U, V](self, func: t.Callable[U, t.Awaitable[V]], /, *args: U.args, **kwargs: U.kwargs) -> V:
         errors: list[Exception] = []
+        attempt: Attempt[V] = Attempt(0, errors)
 
-        timeout = self.__options.retries_timeout.total_seconds() if self.__options.retries_timeout is not None else None
         try:
-            async with asyncio.timeout(timeout):
-                async for attempt in self.__gen_attempts(errors):
-                    yield attempt
+            async with self.__strategy() as strategy:
+                while True:
+                    if strategy.is_attempt_limit_reached(attempt):
+                        if (
+                            attempt_limit_err := strategy.on_attempt_limit_reached(func, args, kwargs, errors)
+                        ) is not None:
+                            raise attempt_limit_err
+
+                        details = "attempt limit was reached"
+                        raise NoMoreAttemptsError(details, errors)
+
+                    await strategy.try_attempt(attempt, func, args, kwargs)
 
                     if attempt.ok:
-                        return
+                        break
+
+                    if (error := attempt.last_error) is not None:
+                        strategy.on_attempt_error(func, args, kwargs, error)
+
+                    attempt = Attempt(attempt.num + 1, errors)
 
         except TimeoutError as err:
-            errors.append(err)
+            if (timeout_err := strategy.on_timeout_reached(func, args, kwargs, errors)) is not None:
+                raise timeout_err from err
 
-        raise NoMoreAttemptsError(no_more_attempts_message, errors)
+            details = "timeout was reached"
+            raise AttemptsTimeoutError(details, errors) from err
 
-    def bind(
-        self,
-        retry_on_exceptions: tuple[type[Exception], ...],
-        no_more_attempts_message: str,
-    ) -> BoundRetryer:
-        return BoundRetryer(self, retry_on_exceptions, no_more_attempts_message)
+        return attempt.result()
 
-    async def __gen_attempts(self, errors: list[Exception]) -> t.AsyncIterable[Attempt]:
-        retries_limit = self.__options.retries_limit or 0
 
-        attempt_delay_factory = self.__provide_attempt_delay_factory()
+@dataclass(frozen=True, kw_only=True)
+class DelayRetryOptions:
+    retry_delay: timedelta | DelayRetryStrategy | None = None
+    retries_limit: int | None = None
+    retries_timeout: timedelta | None = None
 
-        # i == 0 is a first attempt, it's not a retry yet
-        for i in count():
-            if i > retries_limit:
-                return
 
-            delay = attempt_delay_factory(i)
-            if delay:
-                await asyncio.sleep(delay)
+def create_retryer(
+    strategy: RetryStrategy
+    | t.AsyncContextManager[RetryStrategy]
+    | t.Callable[[], t.AsyncContextManager[RetryStrategy]]
+    | None,
+) -> Retryer:
+    if isinstance(strategy, RetryStrategy):
 
-            yield Attempt(i, errors)
+        def provide() -> t.AsyncContextManager[RetryStrategy]:
+            return nullcontext(strategy)
 
-    def __provide_attempt_delay_factory(self) -> t.Callable[[int], float | None]:
-        if self.__options.retry_delay is None:
+        return Retryer(provide)
 
-            def get_no_delay(_: int) -> None:
-                return None
+    elif isinstance(strategy, t.AsyncContextManager):
 
-            return get_no_delay
+        def provide() -> t.AsyncContextManager[RetryStrategy]:
+            return strategy
 
-        mode = self.__options.retry_delay_mode if self.__options.retry_delay_mode is not None else "multiplier"
-        base_delay = self.__options.retry_delay.total_seconds()
-        clamp_delay = self.__get_clamp_delay()
+        return Retryer(provide)
 
-        if mode == "constant":
+    elif callable(strategy):
+        return Retryer(strategy)
 
-            def get_const_delay(_: int) -> float:
-                return base_delay
+    elif strategy is None:
 
-            return get_const_delay
+        def provide() -> t.AsyncContextManager[RetryStrategy]:
+            return nullcontext(NoRetryStrategy())
 
-        elif mode == "multiplier":
+        return Retryer(provide)
 
-            def get_mul_delay(i: int) -> float:
-                return clamp_delay(base_delay * i)
+    else:
+        t.assert_never(strategy)
 
-            return get_mul_delay
 
-        elif mode == "exponential":
+def create_delay_retryer(
+    options: DelayRetryOptions | None = None,
+    errors: t.Sequence[type[Exception]] | None = None,
+    on_attempt_error: t.Callable[[Exception], None] | None = None,
+) -> Retryer:
+    if errors is None:
+        return create_retryer(None)
 
-            def get_exp_delay(i: int) -> float:
-                return clamp_delay(base_delay**i)
+    if options is None or (
+        options.retry_delay is None and options.retries_timeout is None and options.retries_limit is None
+    ):
+        return create_retryer(None)
 
-            return get_exp_delay
+    timeout = options.retries_timeout.total_seconds() if options.retries_timeout is not None else None
 
-        else:
-            t.assert_never(mode)
+    @asynccontextmanager
+    async def provide() -> t.AsyncIterator[RetryStrategy]:
+        strategy = DelayingRetryStrategy(
+            delay=options.retry_delay
+            if isinstance(options.retry_delay, DelayRetryStrategy)
+            else ConstantDelay(options.retry_delay)
+            if isinstance(options.retry_delay, timedelta)
+            else ConstantDelay(timedelta(seconds=0)),
+            errors=errors,
+            on_attempt_error=on_attempt_error,
+            attempt_limit=options.retries_limit,
+        )
 
-    def __get_clamp_delay(self) -> t.Callable[[float], float]:
-        if self.__options.retry_max_delay is not None:
-            max_delay = self.__options.retry_max_delay.total_seconds()
+        async with asyncio.timeout(timeout):
+            yield strategy
 
-            def clamp_delay(value: float) -> float:
-                return min(value, max_delay)
-
-        else:
-
-            def clamp_delay(value: float) -> float:
-                return value
-
-        return clamp_delay
+    return create_retryer(provide)

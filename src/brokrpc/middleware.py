@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import logging
 import typing as t
-from datetime import timedelta
 
 if t.TYPE_CHECKING:
-    from brokrpc.options import ConsumerOptions
+    from datetime import timedelta
 
 from brokrpc.abc import Consumer, ConsumerMiddleware, Publisher, PublisherMiddleware
 from brokrpc.model import (
@@ -16,6 +15,7 @@ from brokrpc.model import (
     SerializerDumpError,
     SerializerLoadError,
 )
+from brokrpc.retry import ConstantDelay, DelayRetryStrategy
 from brokrpc.stringify import to_str_obj
 
 
@@ -71,47 +71,30 @@ class AbortBadMessageMiddleware[T](
 
 
 class RetryOnErrorConsumerMiddleware[T](ConsumerMiddleware[Consumer[T, ConsumerResult], T, ConsumerResult]):
-    @classmethod
-    def from_consume_options(cls, options: ConsumerOptions) -> RetryOnErrorConsumerMiddleware[T]:
-        errors: tuple[type[Exception], ...]
-
-        match options.retry_on_error:
-            case True:
-                errors = (Exception,)
-            case False | None:
-                errors = ()
-            case tuple():
-                errors = options.retry_on_error
-            case error_type:
-                errors = (error_type,)
-
-        delay: timedelta | None
-
-        match options.retry_delay:
-            case float():
-                delay = timedelta(seconds=options.retry_delay)
-            case value:
-                delay = value
-
-        return cls(errors, delay)
-
     def __init__(
         self,
-        retry_on_exceptions: tuple[type[Exception], ...],
-        delay: timedelta | None = None,
+        errors: t.Sequence[type[Exception]],
+        delay: timedelta | DelayRetryStrategy | None = None,
     ) -> None:
-        self.__retry_on_exceptions = retry_on_exceptions
-        self.__delay = delay
+        self.__delay = (
+            delay
+            if isinstance(delay, DelayRetryStrategy)
+            else ConstantDelay(delay)
+            if isinstance(delay, timedelta)
+            else None
+        )
+        self.__errors = tuple(errors)
 
     async def consume(self, inner: Consumer[T, ConsumerResult], message: T) -> ConsumerResult:
         try:
             result = await inner.consume(message)
 
-        except self.__retry_on_exceptions as err:
+        except self.__errors as err:
             logging.warning("%s consumer failed on %s, retrying", inner, message, exc_info=err)
             result = ConsumerRetry(
                 reason=f"{inner} exception occurred: {err}",
-                delay=self.__delay,
+                # TODO: get message consumption attempt count
+                delay=self.__delay.calc_delay(1) if self.__delay is not None else None,
             )
 
         return result

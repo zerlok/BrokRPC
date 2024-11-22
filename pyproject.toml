@@ -22,6 +22,10 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+[tool.poetry.urls]
+Homepage = "https://github.com/zerlok/BrokRPC"
+Issues = "https://github.com/zerlok/BrokRPC/issues"
+
 [tool.poetry.dependencies]
 python = "^3.12"
 yarl = "^1.18.0"
@@ -115,6 +119,7 @@ exclude_lines = [
     "pragma: no cover",
     "@abc.abstractmethod",
     "if __name__ == .__main__.:",
-    "if t.TYPE_CHECKING:"
+    "if t.TYPE_CHECKING:",
+    "t.assert_never(.*)",
 ]
 show_missing = true
