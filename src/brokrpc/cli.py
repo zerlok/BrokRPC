@@ -12,10 +12,10 @@ from yarl import URL
 
 from brokrpc.abc import Serializer
 from brokrpc.broker import Broker
-from brokrpc.entrypoint import Loader
 from brokrpc.message import AppMessage, BinaryMessage, Message
 from brokrpc.middleware import AbortBadMessageMiddleware
 from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
+from brokrpc.plugin import Loader
 from brokrpc.serializer.ident import IdentSerializer
 
 
@@ -169,8 +169,8 @@ def build_parser() -> ArgumentParser:
         "-s",
         "--serializer",
         type=parse_serializer,
-        help="customize serializer. Available options: json, protobuf:{entrypoint to protobuf message class}, "
-        "{entrypoint to serializer class}. Default: none (pass binary data to body as is).",
+        help="customize serializer. Available options: json, protobuf:{plugin to protobuf message class}, "
+        "{plugin to serializer class}. Default: none (pass binary data to body as is).",
         default=IdentSerializer(),
     )
 
