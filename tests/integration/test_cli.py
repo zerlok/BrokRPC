@@ -15,7 +15,6 @@ async def test_publisher_consumer_messaging(
     publisher: asyncio.Task[int],
     publisher_options: CLIOptions,
     consumer_options: CLIOptions,
-    done: asyncio.Event,
     body: bytes,
 ) -> None:
     await asyncio.sleep(1.0)  # wait for consumer is registered
@@ -23,7 +22,7 @@ async def test_publisher_consumer_messaging(
     await publisher_options.input.close()
 
     await asyncio.sleep(1.0)  # wait for message consumption
-    done.set()
+    consumer_options.done.set()
 
     await asyncio.gather(publisher, consumer)
 

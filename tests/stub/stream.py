@@ -9,7 +9,7 @@ class InMemoryStream(t.AsyncIterator[bytes]):
         self.__buffer = deque[bytes]()
         self.__closed = False
 
-    def __aiter__(self) -> t.AsyncIterator[bytes]:
+    def __aiter__(self) -> t.Self:
         return self
 
     async def __anext__(self) -> bytes:

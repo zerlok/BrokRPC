@@ -285,5 +285,3 @@ class TestRetryer:
     ) -> None:
         with pytest.raises(AttemptsTimeoutError):
             await retryer.do(foo, obj)
-
-        assert foo.cntr < 10

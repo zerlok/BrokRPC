@@ -90,7 +90,6 @@ class BindingOptions:
 @dataclass(frozen=True, kw_only=True)
 class ConsumerOptions(QueueOptions, DecoratorOptions):
     pass
-    # retry_on_error: bool | type[Exception] | tuple[type[Exception], ...] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
