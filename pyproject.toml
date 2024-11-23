@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "BrokRPC"
-version = "0.1.0"
+version = "0.2.0"
 description = "framework for gRPC like server-client communication over message brokers"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 readme = "README.md"
@@ -21,6 +21,10 @@ classifiers = [
     "Topic :: System :: Networking",
     "Typing :: Typed",
 ]
+
+[tool.poetry.urls]
+Homepage = "https://github.com/zerlok/BrokRPC"
+Issues = "https://github.com/zerlok/BrokRPC/issues"
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -111,10 +115,11 @@ asyncio_default_fixture_loop_scope = "function"
 branch = true
 
 [tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "@abc.abstractmethod",
+exclude_also = [
     "if __name__ == .__main__.:",
-    "if t.TYPE_CHECKING:"
+    "if t\\.TYPE_CHECKING:",
+    "class .*\\(t\\.Protocol\\):",
+    "@abc\\.abstractmethod",
+    "t\\.assert_never\\(.*\\)",
 ]
 show_missing = true

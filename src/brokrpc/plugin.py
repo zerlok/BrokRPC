@@ -53,14 +53,14 @@ class Loader[T]:
                     loaded_module = importlib.import_module(module)
 
                 except ImportError as err:
-                    details = "invalid entrypoint"
+                    details = "invalid entrypoint module"
                     raise ValueError(details, entrypoint) from err
 
                 try:
                     obj = getattr(loaded_module, attr)
 
                 except AttributeError as err:
-                    details = "invalid entrypoint"
+                    details = "invalid entrypoint attribute"
                     raise ValueError(details, entrypoint) from err
 
                 return obj

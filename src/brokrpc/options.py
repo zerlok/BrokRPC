@@ -8,7 +8,7 @@ if t.TYPE_CHECKING:
     from yarl import URL
 
 
-from brokrpc.retry import RetryOptions
+from brokrpc.retry import DelayRetryOptions
 
 
 class DecoratorOptions:
@@ -29,7 +29,7 @@ type ExchangeType = t.Literal["direct", "fanout", "topic", "headers"]
 
 
 @dataclass(frozen=True, kw_only=True)
-class BrokerOptions(RetryOptions):
+class BrokerOptions(DelayRetryOptions):
     driver: str
     url: URL
 
@@ -88,8 +88,8 @@ class BindingOptions:
 
 
 @dataclass(frozen=True, kw_only=True)
-class ConsumerOptions(QueueOptions, RetryOptions, DecoratorOptions):
-    retry_on_error: bool | type[Exception] | tuple[type[Exception], ...] | None = None
+class ConsumerOptions(QueueOptions, DecoratorOptions):
+    pass
 
 
 @dataclass(frozen=True, kw_only=True)

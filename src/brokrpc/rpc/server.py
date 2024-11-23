@@ -14,9 +14,11 @@ if t.TYPE_CHECKING:
     from concurrent.futures import Executor
     from datetime import timedelta
 
-    from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer
     from brokrpc.broker import Broker
+    from brokrpc.message import BinaryMessage
 
+from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, Consumer, Serializer
+from brokrpc.model import ConsumerResult
 from brokrpc.options import BindingOptions, ExchangeOptions, QueueOptions, merge_options
 from brokrpc.rpc.abc import HandlerSerializer, UnaryUnaryHandler
 from brokrpc.rpc.handler import AsyncFuncHandler, SyncFuncHandler
@@ -59,7 +61,7 @@ class Server:
         self.__lock = asyncio.Lock()
         self.__cm_stack = AsyncExitStack()
         self.__state = State.IDLE
-        self.__handlers: list[t.AsyncContextManager[BoundConsumer]] = []
+        self.__consumers: list[t.AsyncContextManager[BoundConsumer]] = []
         self.__bound_consumers: list[BoundConsumer] = []
 
     def __str__(self) -> str:
@@ -72,6 +74,45 @@ class Server:
     @property
     def state(self) -> State:
         return self.__state
+
+    def register_consumer[U](
+        self,
+        func: Consumer[U, ConsumerResult]
+        | t.Callable[[U], t.Awaitable[ConsumerResult]]
+        | t.Callable[[U], ConsumerResult],
+        routing_key: str,
+        serializer: Serializer[U, BinaryMessage],
+        exchange: ExchangeOptions | None = None,
+        queue: QueueOptions | None = None,
+    ) -> None:
+        if self.__state is not State.IDLE:
+            raise ServerNotInConfigurableStateError(self)
+
+        binding = self.__get_binding_options(exchange, routing_key, queue)
+
+        cm: t.AsyncContextManager[BoundConsumer]
+        match func:
+            case consumer if isinstance(consumer, Consumer):
+                cm = self.__broker.consumer(consumer, binding, serializer=serializer)
+
+            case async_func if inspect.iscoroutinefunction(async_func):
+                cm = self.__broker.consumer(async_func, binding, serializer=serializer)
+
+            case sync_func if callable(sync_func):
+                cm = self.__broker.consumer(
+                    # TODO: avoid cast
+                    t.cast(t.Callable[[U], ConsumerResult], sync_func),
+                    binding,
+                    serializer=serializer,
+                    executor=self.__options.executor if self.__options is not None else None,
+                )
+
+            case _:
+                # TODO: make `t.assert_never` work
+                details = "invalid func type"
+                raise TypeError(details, func)
+
+        self.__consumers.append(cm)
 
     def register_unary_unary_handler[U, V](
         self,
@@ -96,6 +137,7 @@ class Server:
             case sync_func if callable(sync_func):
                 factory = partial(
                     SyncFuncHandler,
+                    # TODO: avoid cast
                     t.cast(t.Callable[[Request[U]], V], sync_func),
                     serializer,
                     executor=self.__options.executor if self.__options is not None else None,
@@ -106,8 +148,8 @@ class Server:
                 details = "invalid func type"
                 raise TypeError(details, func)
 
-        self.__handlers.append(
-            self.__bind_consumer(
+        self.__consumers.append(
+            self.__bind_handler(
                 factory=factory,
                 binding=self.__get_binding_options(exchange, routing_key, queue),
             )
@@ -123,7 +165,7 @@ class Server:
             self.__state = State.STARTUP
             try:
                 bound_consumers = await asyncio.gather(
-                    *(self.__cm_stack.enter_async_context(handler_cm) for handler_cm in self.__handlers)
+                    *(self.__cm_stack.enter_async_context(handler_cm) for handler_cm in self.__consumers)
                 )
 
             except Exception:
@@ -182,7 +224,7 @@ class Server:
                 loop.remove_signal_handler(sig)
 
     @asynccontextmanager
-    async def __bind_consumer(
+    async def __bind_handler(
         self,
         factory: t.Callable[[BinaryPublisher], BinaryConsumer],
         binding: BindingOptions,

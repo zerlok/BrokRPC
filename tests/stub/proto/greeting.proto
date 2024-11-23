@@ -2,10 +2,35 @@ syntax = "proto3";
 
 package greeting;
 
+import "brokrpc/spec/v1/amqp.proto";
+import "brokrpc/spec/v1/consumer.proto";
+
 message GreetingRequest {
   string name = 1;
 }
 
 message GreetingResponse {
   string result = 2;
+}
+
+service GreetService {
+  option (brokrpc.spec.v1.exchange) = {
+    name: "greeting"
+    type: EXCHANGE_TYPE_DIRECT
+    auto_delete: true
+  };
+
+  rpc Greet(GreetingRequest) returns (GreetingResponse) {
+    option (brokrpc.spec.v1.queue) = {
+      name: "greeting-requests"
+      auto_delete: true
+    };
+  }
+
+  rpc NotifyGreet(GreetingResponse) returns (brokrpc.spec.v1.Void) {
+    option (brokrpc.spec.v1.queue) = {
+      name: "greeting-notifications"
+      durable: true
+    };
+  }
 }
