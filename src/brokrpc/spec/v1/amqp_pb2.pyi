@@ -4,6 +4,7 @@ import google.protobuf.message
 import typing
 
 class ExchangeType(enum.IntEnum):
+    """All possible types of exchanges in AMQP"""
     EXCHANGE_TYPE_UNSPECIFIED = 0
     EXCHANGE_TYPE_DIRECT = 1
     EXCHANGE_TYPE_FANOUT = 2
@@ -62,6 +63,7 @@ class ArgumentValue(google.protobuf.message.Message):
     def WhichOneof(self, oneof_group: typing.Literal['value']) -> typing.Optional[typing.Literal['null_value', 'bool_value', 'int_value', 'float_value', 'str_value', 'list_value', 'map_value']]:...
 
 class ExchangeOptions(google.protobuf.message.Message):
+    """A set of attributes of exchange entity in AMQP"""
 
     def __init__(self, *, name: typing.Optional[builtins.str]=None, type: typing.Optional[ExchangeType]=None, durable: typing.Optional[builtins.bool]=None, auto_delete: typing.Optional[builtins.bool]=None, arguments: typing.Mapping[builtins.str, ArgumentValue]) -> None:...
 
@@ -85,6 +87,7 @@ class ExchangeOptions(google.protobuf.message.Message):
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
 
 class QueueOptions(google.protobuf.message.Message):
+    """A set of attributes of queue entity in AMQP"""
 
     def __init__(self, *, name: typing.Optional[builtins.str]=None, durable: typing.Optional[builtins.bool]=None, exclusive: typing.Optional[builtins.bool]=None, auto_delete: typing.Optional[builtins.bool]=None, arguments: typing.Mapping[builtins.str, ArgumentValue]) -> None:...
 

@@ -4,8 +4,12 @@ package brokrpc.spec.v1;
 
 import "google/protobuf/descriptor.proto";
 
+// Special type for marking methods that doesn't respond to RPC requests. Designed to be used in event driven
+// architecture (fire & forget approach).
+message Void {}
+
 message ConsumerOptions {
-  /* If specified, consumer will unbind the queue and consume all last messages in the queue. */
+  // If set, consumer will unbind the queue and consume all last messages in the queue.
   optional bool fading = 1;
 }
 

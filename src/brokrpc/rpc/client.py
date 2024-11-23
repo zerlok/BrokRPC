@@ -1,10 +1,14 @@
 import typing as t
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from datetime import timedelta
 
+from brokrpc.abc import Publisher, Serializer
 from brokrpc.broker import Broker
-from brokrpc.options import BindingOptions, ExchangeOptions, QueueOptions, merge_options
+from brokrpc.message import AppMessage, BinaryMessage, Message
+from brokrpc.model import PublisherResult
+from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions, merge_options
 from brokrpc.rpc.abc import Caller, CallerSerializer
 from brokrpc.rpc.caller import RequestCaller
 from brokrpc.rpc.handler import HandlerResponseConsumer
@@ -15,6 +19,27 @@ from brokrpc.rpc.storage import WaiterStorage
 class Client:
     def __init__(self, broker: Broker) -> None:
         self.__broker = broker
+
+    async def publisher[U](
+        self,
+        *,
+        routing_key: str,
+        serializer: Serializer[Message[U], BinaryMessage],
+        exchange: ExchangeOptions | None = None,
+    ) -> t.AsyncContextManager[Publisher[U, PublisherResult]]:
+        def build_message(body: U) -> Message[U]:
+            return AppMessage(
+                body=body,
+                routing_key=routing_key,
+                exchange=exchange.name if exchange is not None else None,
+            )
+
+        return (
+            self.__broker.builder_publisher()
+            .add_serializer(serializer)
+            .add_serializer(build_message)
+            .build(PublisherOptions(**asdict(exchange)) if exchange is not None else None)
+        )
 
     @asynccontextmanager
     async def unary_unary_caller[U, V](
