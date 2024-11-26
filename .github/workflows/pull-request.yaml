@@ -1,4 +1,4 @@
-name: Check On Pull Request
+name: pull request checks
 
 on:
   pull_request:
@@ -7,26 +7,26 @@ on:
   push:
     branches:
       - main
+
 jobs:
   buf:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: bufbuild/buf-setup-action@v1
-      - uses: bufbuild/buf-lint-action@v1
-      - uses: bufbuild/buf-breaking-action@v1
+      - uses: bufbuild/buf-action@v1
         with:
-          against: 'https://github.com/zerlok/BrokRPC.git#branch=main'
+          breaking_against: 'https://github.com/zerlok/BrokRPC.git#branch=main'
+          token: ${{ secrets.BUF_TOKEN }}
+
   static:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: [ "3.12" ]
-# TODO: enable buf lint & format
-#        buf-version: [ "1.31.0" ]
     steps:
       - uses: actions/checkout@v4
       - name: Install Python ${{ matrix.python-version }}
@@ -54,6 +54,7 @@ jobs:
         run: poetry run ruff check
       - name: Run ruff format
         run: poetry run ruff format --check
+
   test:
     runs-on: ubuntu-latest
     services:

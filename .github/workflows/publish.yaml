@@ -1,11 +1,25 @@
-name: Publish Python Package
+name: publish release
 
 on:
   release:
     types: [published]
 
 jobs:
-  publish:
+  buf:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-action@v1
+        with:
+          lint: false
+          format: false
+          breaking: false
+          push: true
+          token: ${{ secrets.BUF_TOKEN }}
+
+  pypi:
     runs-on: ubuntu-latest
     environment: release
     permissions:
