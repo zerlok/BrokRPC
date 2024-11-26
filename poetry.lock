@@ -642,7 +642,7 @@ name = "protobuf"
 version = "5.28.3"
 description = ""
 category = "main"
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "protobuf-5.28.3-cp310-abi3-win32.whl", hash = "sha256:0c4eec6f987338617072592b97943fdbe30d019c56126493111cf24344c1cc24"},
@@ -664,13 +664,14 @@ version = "0.3.1"
 description = "Generate Python MyPy stub modules from protobuf files."
 category = "dev"
 optional = false
-python-versions = "*"
-files = []
-develop = true
+python-versions = "<4.0,>=3.9"
+files = [
+    {file = "pyprotostuben-0.3.1-py3-none-any.whl", hash = "sha256:799dd8a59e558fae3c92f761ae81b50339592ccb8829cb26e20b1dac943b8d08"},
+    {file = "pyprotostuben-0.3.1.tar.gz", hash = "sha256:ad5e7f310082c98deabdeea863764f3d38ca2b2396a9801a11738e1d79a5afc5"},
+]
 
-[package.source]
-type = "directory"
-url = "../pyprotostuben"
+[package.dependencies]
+protobuf = ">=5.28.3,<6.0.0"
 
 [[package]]
 name = "pytest"
