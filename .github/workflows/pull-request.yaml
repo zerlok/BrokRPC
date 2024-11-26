@@ -19,7 +19,7 @@ jobs:
       - uses: bufbuild/buf-action@v1
         with:
           breaking_against: 'https://github.com/zerlok/BrokRPC.git#branch=main'
-          token: ${{ secrets.BUF_TOKEN }}
+          push: false
 
   static:
     runs-on: ubuntu-latest
