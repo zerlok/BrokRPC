@@ -4,6 +4,8 @@ managed:
 plugins:
   - protoc_builtin: python
     out: src
-  - protoc_builtin: pyprotostuben
+  - protoc_builtin: mypy-stub
     out: src
     strategy: all
+    opt:
+      - include-descriptors

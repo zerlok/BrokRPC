@@ -1,6 +1,9 @@
 import builtins
 import enum
+import google.protobuf.descriptor
+import google.protobuf.descriptor_pb2
 import google.protobuf.message
+import pyprotostuben.protobuf.extension
 import typing
 
 class ExchangeType(enum.IntEnum):
@@ -21,6 +24,7 @@ class ArgumentListValue(google.protobuf.message.Message):
     def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class ArgumentMapValue(google.protobuf.message.Message):
 
@@ -32,6 +36,7 @@ class ArgumentMapValue(google.protobuf.message.Message):
     def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class ArgumentValue(google.protobuf.message.Message):
 
@@ -61,6 +66,7 @@ class ArgumentValue(google.protobuf.message.Message):
     def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
     def WhichOneof(self, oneof_group: typing.Literal['value']) -> typing.Optional[typing.Literal['null_value', 'bool_value', 'int_value', 'float_value', 'str_value', 'list_value', 'map_value']]:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class ExchangeOptions(google.protobuf.message.Message):
     """A set of attributes of exchange entity in AMQP"""
@@ -85,6 +91,7 @@ class ExchangeOptions(google.protobuf.message.Message):
     def HasField(self, field_name: typing.Literal['name', 'type', 'durable', 'auto_delete']) -> builtins.bool:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class QueueOptions(google.protobuf.message.Message):
     """A set of attributes of queue entity in AMQP"""
@@ -109,3 +116,7 @@ class QueueOptions(google.protobuf.message.Message):
     def HasField(self, field_name: typing.Literal['name', 'durable', 'exclusive', 'auto_delete']) -> builtins.bool:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+exchange: typing.Final[pyprotostuben.protobuf.extension.ExtensionDescriptor[google.protobuf.descriptor_pb2.ServiceOptions, ExchangeOptions]]
+queue: typing.Final[pyprotostuben.protobuf.extension.ExtensionDescriptor[google.protobuf.descriptor_pb2.MethodOptions, QueueOptions]]
+DESCRIPTOR: google.protobuf.descriptor.FileDescriptor

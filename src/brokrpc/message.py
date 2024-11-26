@@ -130,22 +130,22 @@ type BinaryMessage = Message[bytes]
 
 class AppMessage[T](Message[T]):
     __slots__ = (
-        "__body",
-        "__routing_key",
-        "__exchange",
-        "__content_type",
-        "__content_encoding",
-        "__headers",
-        "__delivery_mode",
-        "__priority",
-        "__correlation_id",
-        "__reply_to",
-        "__timeout",
-        "__message_id",
-        "__timestamp",
-        "__message_type",
-        "__user_id",
         "__app_id",
+        "__body",
+        "__content_encoding",
+        "__content_type",
+        "__correlation_id",
+        "__delivery_mode",
+        "__exchange",
+        "__headers",
+        "__message_id",
+        "__message_type",
+        "__priority",
+        "__reply_to",
+        "__routing_key",
+        "__timeout",
+        "__timestamp",
+        "__user_id",
     )
 
     # NOTE: message constructor has a lot of options to set up a structure (dataclass)
@@ -276,12 +276,12 @@ class AppMessage[T](Message[T]):
 @t.final
 class PackedMessage[T](Message[T]):
     __slots__ = (
-        "__original",
         "__body",
-        "__content_type",
         "__content_encoding",
+        "__content_type",
         "__headers",
         "__message_type",
+        "__original",
     )
 
     # NOTE: message constructor has a lot of options to set up a structure (dataclass)
@@ -382,8 +382,8 @@ class PackedMessage[T](Message[T]):
 @t.final
 class UnpackedMessage[T](Message[T]):
     __slots__ = (
-        "__original",
         "__body",
+        "__original",
     )
 
     def __init__(self, original: Message[object], body: T) -> None:

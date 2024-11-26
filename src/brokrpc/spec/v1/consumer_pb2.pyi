@@ -1,5 +1,8 @@
 import builtins
+import google.protobuf.descriptor
+import google.protobuf.descriptor_pb2
 import google.protobuf.message
+import pyprotostuben.protobuf.extension
 import typing
 
 class Void(google.protobuf.message.Message):
@@ -11,6 +14,7 @@ class Void(google.protobuf.message.Message):
     def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class ConsumerOptions(google.protobuf.message.Message):
 
@@ -24,3 +28,6 @@ class ConsumerOptions(google.protobuf.message.Message):
     def HasField(self, field_name: typing.Literal['fading']) -> builtins.bool:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+consumer: typing.Final[pyprotostuben.protobuf.extension.ExtensionDescriptor[google.protobuf.descriptor_pb2.MethodOptions, ConsumerOptions]]
+DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
