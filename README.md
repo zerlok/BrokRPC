@@ -28,6 +28,8 @@ You can generate python code for server & client from `.proto` files.
 The [pyprotostuben](https://github.com/zerlok/pyprotostuben) project provides protoc plugin `protoc-gen-brokrpc`. See 
 pyprotostuben project example for more details.
 
+You may configure codegen output using protobuf extensions from [buf schema registry](https://buf.build/zerlok/brokrpc).
+
 ## supported brokers & protocols
 
 * [AMQP](https://www.rabbitmq.com/tutorials/amqp-concepts)
