@@ -1,5 +1,6 @@
 import builtins
 import google.protobuf.any_pb2
+import google.protobuf.descriptor
 import google.protobuf.message
 import google.rpc.code_pb2
 import typing
@@ -17,6 +18,7 @@ class Error(google.protobuf.message.Message):
     def HasField(self, field_name: typing.Literal['message']) -> builtins.bool:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class UnaryRequest(google.protobuf.message.Message):
 
@@ -31,6 +33,7 @@ class UnaryRequest(google.protobuf.message.Message):
     def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class UnaryResponse(google.protobuf.message.Message):
 
@@ -51,6 +54,7 @@ class UnaryResponse(google.protobuf.message.Message):
     def HasField(self, field_name: typing.Literal['payload', 'error']) -> builtins.bool:...
 
     def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class StreamRequest(google.protobuf.message.Message):
 
@@ -61,6 +65,7 @@ class StreamRequest(google.protobuf.message.Message):
         def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
         def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     class Part(google.protobuf.message.Message):
 
@@ -72,6 +77,7 @@ class StreamRequest(google.protobuf.message.Message):
         def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
         def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     class End(google.protobuf.message.Message):
 
@@ -80,6 +86,7 @@ class StreamRequest(google.protobuf.message.Message):
         def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
         def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     def __init__(self, *, uuid: builtins.bytes, index: builtins.int, start: typing.Optional[StreamRequest.Start]=None, part: typing.Optional[StreamRequest.Part]=None, end: typing.Optional[StreamRequest.End]=None) -> None:...
 
@@ -101,6 +108,7 @@ class StreamRequest(google.protobuf.message.Message):
     def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
     def WhichOneof(self, oneof_group: typing.Literal['event']) -> typing.Optional[typing.Literal['start', 'part', 'end']]:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
 class StreamResponse(google.protobuf.message.Message):
 
@@ -111,6 +119,7 @@ class StreamResponse(google.protobuf.message.Message):
         def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
         def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     class Part(google.protobuf.message.Message):
 
@@ -122,6 +131,7 @@ class StreamResponse(google.protobuf.message.Message):
         def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
         def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     class End(google.protobuf.message.Message):
 
@@ -136,6 +146,7 @@ class StreamResponse(google.protobuf.message.Message):
         def HasField(self, field_name: typing.Literal['error']) -> builtins.bool:...
 
         def WhichOneof(self, oneof_group: typing.NoReturn) -> typing.NoReturn:...
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     def __init__(self, *, uuid: builtins.bytes, index: builtins.int, start: typing.Optional[StreamResponse.Start]=None, part: typing.Optional[StreamResponse.Part]=None, end: typing.Optional[StreamResponse.End]=None) -> None:...
 
@@ -157,3 +168,5 @@ class StreamResponse(google.protobuf.message.Message):
     def HasField(self, field_name: typing.NoReturn) -> typing.NoReturn:...
 
     def WhichOneof(self, oneof_group: typing.Literal['event']) -> typing.Optional[typing.Literal['start', 'part', 'end']]:...
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+DESCRIPTOR: google.protobuf.descriptor.FileDescriptor

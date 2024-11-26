@@ -1,5 +1,6 @@
 # BrokRPC
 
+[![Latest Version](https://img.shields.io/pypi/v/BrokRPC.svg)](https://pypi.python.org/pypi/BrokRPC)
 [![Python Supported versions](https://img.shields.io/pypi/pyversions/BrokRPC.svg)](https://pypi.python.org/pypi/BrokRPC)
 [![MyPy Strict](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/en/stable/getting_started.html#strict-mode-and-configuration)
 [![Test Coverage](https://codecov.io/gh/zerlok/BrokRPC/branch/main/graph/badge.svg)](https://codecov.io/gh/zerlok/BrokRPC)
