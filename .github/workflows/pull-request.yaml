@@ -7,8 +7,18 @@ on:
   push:
     branches:
       - main
-
 jobs:
+  buf:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+      - uses: bufbuild/buf-lint-action@v1
+      - uses: bufbuild/buf-breaking-action@v1
+        with:
+          against: 'https://github.com/zerlok/BrokRPC.git#branch=main'
   static:
     runs-on: ubuntu-latest
     strategy:
