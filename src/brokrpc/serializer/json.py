@@ -16,8 +16,17 @@ class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[
         encoder: JSONEncoder | None = None,
         decoder: JSONDecoder | None = None,
         encoding: str | None = None,
+        default: t.Callable[[object], object] | None = None,
     ) -> None:
-        self.__encoder = encoder if encoder is not None else JSONEncoder(indent=None, separators=(",", ":"))
+        self.__encoder = (
+            encoder
+            if encoder is not None
+            else JSONEncoder(
+                indent=None,
+                separators=(",", ":"),
+                default=default,
+            )
+        )
         self.__decoder = decoder if decoder is not None else JSONDecoder()
         self.__encoding = encoding if encoding is not None else "utf-8"
 

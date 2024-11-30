@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import typing as t
+import warnings
 
 if t.TYPE_CHECKING:
     from concurrent.futures import Executor
@@ -63,6 +64,10 @@ class Broker(t.AsyncContextManager["Broker"]):
         self.__lock = asyncio.Lock()
         self.__opened = asyncio.Event()
         self.__driver: BrokerDriver | None = None
+
+    def __del__(self) -> None:
+        if self.is_connected:
+            warnings.warn("broker was not disconnected properly", RuntimeWarning, stacklevel=1)
 
     def __str__(self) -> str:
         return to_str_obj(self, is_connected=self.is_connected, driver=self.__driver)
@@ -140,7 +145,7 @@ class Broker(t.AsyncContextManager["Broker"]):
         *,
         serializer: t.Callable[[T], BinaryMessage] | Serializer[T, BinaryMessage] | None = None,
     ) -> t.AsyncContextManager[BinaryPublisher] | t.AsyncContextManager[Publisher[T, PublisherResult]]:
-        return self.builder_publisher().add_serializer(serializer).build(options)
+        return self.build_publisher().add_serializer(serializer).build(options)
 
     @t.overload
     def consumer[T](
@@ -212,7 +217,7 @@ class Broker(t.AsyncContextManager["Broker"]):
             .build(t.cast(t.Any, consumer), options, executor=executor)
         )
 
-    def builder_publisher(self) -> PublisherBuilder[BinaryMessage, PublisherResult]:
+    def build_publisher(self) -> PublisherBuilder[BinaryMessage, PublisherResult]:
         return (
             PublisherBuilder(self.__provide_publisher, ident)
             .set_exchange(self.__default_exchange)
@@ -239,7 +244,9 @@ class Broker(t.AsyncContextManager["Broker"]):
         return self.__get_driver().provide_publisher(options)
 
     def __bind_consumer(
-        self, consumer: BinaryConsumer, options: BindingOptions
+        self,
+        consumer: BinaryConsumer,
+        options: BindingOptions,
     ) -> t.AsyncContextManager[BoundConsumer]:
         return self.__get_driver().bind_consumer(consumer, options)
 

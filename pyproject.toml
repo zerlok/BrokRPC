@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "BrokRPC"
-version = "0.2.2"
+version = "0.2.3"
 description = "framework for gRPC like server-client communication over message brokers"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 readme = "README.md"
@@ -94,6 +94,11 @@ strict = true
 [[tool.mypy.overrides]]
 module = ["google.rpc.*"]
 ignore_missing_imports = true
+
+# NOTE: allow return `typing.Any` in test fixtures (e.g. mock objects created with `create_autospec`)
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+warn_return_any = false
 
 
 [tool.pytest.ini_options]

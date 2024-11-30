@@ -35,7 +35,7 @@ class Client:
             )
 
         return (
-            self.__broker.builder_publisher()
+            self.__broker.build_publisher()
             .add_serializer(serializer)
             .add_serializer(build_message)
             .build(PublisherOptions(**asdict(exchange)) if exchange is not None else None)

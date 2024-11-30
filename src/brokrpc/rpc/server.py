@@ -61,7 +61,7 @@ class Server:
         self.__lock = asyncio.Lock()
         self.__cm_stack = AsyncExitStack()
         self.__state = State.IDLE
-        self.__consumers: list[t.AsyncContextManager[BoundConsumer]] = []
+        self.__consumer_cms: list[t.Callable[[], t.AsyncContextManager[BoundConsumer]]] = []
         self.__bound_consumers: list[BoundConsumer] = []
 
     def __str__(self) -> str:
@@ -90,16 +90,17 @@ class Server:
 
         binding = self.__get_binding_options(exchange, routing_key, queue)
 
-        cm: t.AsyncContextManager[BoundConsumer]
+        cm: t.Callable[[], t.AsyncContextManager[BoundConsumer]]
         match func:
             case consumer if isinstance(consumer, Consumer):
-                cm = self.__broker.consumer(consumer, binding, serializer=serializer)
+                cm = partial(self.__broker.consumer, consumer, binding, serializer=serializer)
 
             case async_func if inspect.iscoroutinefunction(async_func):
-                cm = self.__broker.consumer(async_func, binding, serializer=serializer)
+                cm = partial(self.__broker.consumer, async_func, binding, serializer=serializer)
 
             case sync_func if callable(sync_func):
-                cm = self.__broker.consumer(
+                cm = partial(
+                    self.__broker.consumer,
                     # TODO: avoid cast
                     t.cast(t.Callable[[U], ConsumerResult], sync_func),
                     binding,
@@ -112,7 +113,7 @@ class Server:
                 details = "invalid func type"
                 raise TypeError(details, func)
 
-        self.__consumers.append(cm)
+        self.__consumer_cms.append(cm)
 
     def register_unary_unary_handler[U, V](
         self,
@@ -148,8 +149,9 @@ class Server:
                 details = "invalid func type"
                 raise TypeError(details, func)
 
-        self.__consumers.append(
-            self.__bind_handler(
+        self.__consumer_cms.append(
+            partial(
+                self.__bind_handler,
                 factory=factory,
                 binding=self.__get_binding_options(exchange, routing_key, queue),
             )
@@ -165,7 +167,7 @@ class Server:
             self.__state = State.STARTUP
             try:
                 bound_consumers = await asyncio.gather(
-                    *(self.__cm_stack.enter_async_context(handler_cm) for handler_cm in self.__consumers)
+                    *(self.__cm_stack.enter_async_context(cm()) for cm in self.__consumer_cms)
                 )
 
             except Exception:

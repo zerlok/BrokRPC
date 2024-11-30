@@ -1,19 +1,32 @@
 import typing as t
 from contextlib import nullcontext
 from datetime import timedelta
+from unittest.mock import create_autospec
 
 import pytest
 
 # FIXME: find a way to import Parser
 # NOTE: fixes strange error `Module "_pytest.config" does not explicitly export attribute "Parser"`.
 from _pytest.config import Config, Parser  # type: ignore[attr-defined]
+from _pytest.fixtures import SubRequest
 from yarl import URL
 
-from brokrpc.abc import BrokerDriver
+from brokrpc.abc import Consumer, Serializer
 from brokrpc.broker import Broker
-from brokrpc.options import BrokerOptions
+from brokrpc.message import BinaryMessage
+from brokrpc.model import ConsumerResult
+from brokrpc.options import BindingOptions, BrokerOptions
 from brokrpc.retry import ConstantDelay, DelayRetryStrategy, ExponentialDelay, MultiplierDelay
+from brokrpc.rpc.abc import UnaryUnaryHandler
 from tests.stub.driver import StubBrokerDriver, StubConsumer
+
+BROKER_IS_CONNECTED: t.Final = pytest.mark.parametrize(
+    "broker_connected", [pytest.param(True, id="broker is connected")]
+)
+BROKER_IS_NOT_CONNECTED: t.Final = pytest.mark.parametrize(
+    "broker_connected", [pytest.param(False, id="broker is not connected")]
+)
+WARNINGS_AS_ERRORS: t.Final = pytest.mark.WARNINGS_AS_ERRORS("error")
 
 
 @pytest.hookimpl(trylast=True)
@@ -98,21 +111,55 @@ def parse_retry_delay_strategy(config: Config) -> DelayRetryStrategy | None:
 
 
 @pytest.fixture
-def broker_driver() -> StubBrokerDriver:
+def stub_broker_driver() -> StubBrokerDriver:
     return StubBrokerDriver()
 
 
 @pytest.fixture
-def broker(broker_driver: BrokerDriver) -> Broker:
-    return Broker(nullcontext(broker_driver))
+async def stub_broker(*, stub_broker_driver: StubBrokerDriver, broker_connected: bool) -> t.AsyncIterator[Broker]:
+    broker = Broker(nullcontext(stub_broker_driver))
+    try:
+        if broker_connected:
+            await broker.connect()
+
+        assert broker.is_connected is broker_connected
+
+        yield broker
+
+    finally:
+        await broker.disconnect()
 
 
 @pytest.fixture
-async def connected_broker(broker: Broker) -> t.AsyncIterator[Broker]:
-    async with broker:
-        yield broker
+def broker_connected() -> bool:
+    return False
 
 
 @pytest.fixture
 def stub_consumer() -> StubConsumer:
     return StubConsumer()
+
+
+@pytest.fixture
+def mock_consumer() -> Consumer[object, ConsumerResult]:
+    return create_autospec(Consumer)
+
+
+@pytest.fixture
+def mock_unary_unary_handler() -> UnaryUnaryHandler[object, object]:
+    return create_autospec(UnaryUnaryHandler)
+
+
+@pytest.fixture
+def stub_routing_key(request: SubRequest) -> str:
+    return request.node.name
+
+
+@pytest.fixture
+def stub_binding_options(stub_routing_key: str) -> BindingOptions:
+    return BindingOptions(binding_keys=(stub_routing_key,))
+
+
+@pytest.fixture
+def mock_serializer() -> Serializer[object, BinaryMessage]:
+    return create_autospec(Serializer)
