@@ -17,7 +17,7 @@ from brokrpc.message import BinaryMessage
 from brokrpc.model import ConsumerResult
 from brokrpc.options import BindingOptions, BrokerOptions
 from brokrpc.retry import ConstantDelay, DelayRetryStrategy, ExponentialDelay, MultiplierDelay
-from brokrpc.rpc.abc import UnaryUnaryHandler
+from brokrpc.rpc.abc import RPCSerializer, UnaryUnaryHandler
 from tests.stub.driver import StubBrokerDriver, StubConsumer
 
 BROKER_IS_CONNECTED: t.Final = pytest.mark.parametrize(
@@ -163,3 +163,8 @@ def stub_binding_options(stub_routing_key: str) -> BindingOptions:
 @pytest.fixture
 def mock_serializer() -> Serializer[object, BinaryMessage]:
     return create_autospec(Serializer)
+
+
+@pytest.fixture
+def mock_rpc_serializer() -> RPCSerializer[object, object]:
+    return create_autospec(RPCSerializer)

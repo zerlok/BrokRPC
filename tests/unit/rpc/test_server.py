@@ -76,12 +76,12 @@ def test_register_unary_unary_ok[U, V](
     server: Server,
     mock_unary_unary_handler: UnaryUnaryHandler[Request[U], V],
     stub_routing_key: str,
-    mock_serializer: HandlerSerializer[U, V],
+    mock_rpc_serializer: HandlerSerializer[U, V],
 ) -> None:
     server.register_unary_unary_handler(
         func=mock_unary_unary_handler,
         routing_key=stub_routing_key,
-        serializer=mock_serializer,
+        serializer=mock_rpc_serializer,
     )
 
 
@@ -91,13 +91,13 @@ def test_register_unary_unary_error[U, V](
     server: Server,
     mock_unary_unary_handler: UnaryUnaryHandler[Request[U], V],
     stub_routing_key: str,
-    mock_serializer: HandlerSerializer[U, V],
+    mock_rpc_serializer: HandlerSerializer[U, V],
 ) -> None:
     with pytest.raises(ServerNotInConfigurableStateError):
         server.register_unary_unary_handler(
             func=mock_unary_unary_handler,
             routing_key=stub_routing_key,
-            serializer=mock_serializer,
+            serializer=mock_rpc_serializer,
         )
 
 
