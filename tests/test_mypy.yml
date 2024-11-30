@@ -1,3 +1,99 @@
+- case: server
+  main: |-
+    import typing
+    
+    from brokrpc.abc import Serializer
+    from brokrpc.message import Message, BinaryMessage
+    from brokrpc.rpc.abc import RPCSerializer
+    from brokrpc.rpc.model import Request
+    from brokrpc.rpc.server import Server
+    from brokrpc.serializer.json import JSONSerializer
+    
+    from stubs import *
+
+    def main(server: Server, func: {{ func }}, ser: {{ ser }}) -> None:
+        server.{{ method }}(func=func, routing_key="test", serializer=ser)  # {{ expected }}
+
+  parametrized:
+    # positive
+    - method: register_consumer
+      func: typing.Callable[[Message[Foo]], None]
+      ser: Serializer[Message[Foo], BinaryMessage]
+      expected: Y
+    - method: register_consumer
+      func: typing.Callable[[Message[object]], typing.Coroutine[typing.Any, typing.Any, bool]]
+      ser: JSONSerializer
+      expected: Y
+    - method: register_unary_unary_handler
+      func: typing.Callable[[Request[Foo]], typing.Coroutine[typing.Any, typing.Any, Bar]]
+      ser: RPCSerializer[Foo, Bar]
+      expected: Y
+    - method: register_unary_unary_handler
+      func: typing.Callable[[Request[object]], object]
+      ser: JSONSerializer
+      expected: Y
+  files:
+    - path: stubs.py
+      content: |-
+        class Foo:
+            pass
+        
+        class Bar:
+            pass
+
+  mypy_config: |-
+    [mypy-aiormq.*,pamqp.*,pkg_resources.*]
+    ignore_missing_imports = True
+    ignore_errors = True
+
+
+- case: client
+  main: |-
+    from brokrpc.abc import Serializer
+    from brokrpc.message import Message, BinaryMessage
+    from brokrpc.rpc.abc import RPCSerializer
+    from brokrpc.rpc.client import Client
+    from brokrpc.serializer.json import JSONSerializer
+    
+    from stubs import *
+
+    async def main(client: Client, ser: {{ ser }}) -> None:
+        async with client.{{ method }}(routing_key="test", serializer=ser) as caller:
+            reveal_type(caller)  # {{ expected }}
+
+  parametrized:
+    # positive
+    - method: publisher
+      ser: Serializer[Message[Foo], BinaryMessage]
+      expected: |-
+        N: Revealed type is "brokrpc.abc.Publisher[stubs.Foo, Union[builtins.bool, None]]"
+    - method: publisher
+      ser: JSONSerializer
+      expected: |-
+        N: Revealed type is "brokrpc.abc.Publisher[builtins.object, Union[builtins.bool, None]]"
+    - method: unary_unary_caller
+      ser: RPCSerializer[Foo, Bar]
+      expected: |-
+        N: Revealed type is "brokrpc.rpc.abc.Caller[stubs.Foo, stubs.Bar]"
+    - method: unary_unary_caller
+      ser: JSONSerializer
+      expected: |-
+        N: Revealed type is "brokrpc.rpc.abc.Caller[builtins.object, builtins.object]"
+  files:
+    - path: stubs.py
+      content: |-
+        class Foo:
+            pass
+        
+        class Bar:
+            pass
+
+  mypy_config: |-
+    [mypy-aiormq.*,pamqp.*,pkg_resources.*]
+    ignore_missing_imports = True
+    ignore_errors = True
+
+
 - case: message_body_covariance
   main: |-
     from stubs import *

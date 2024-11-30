@@ -20,7 +20,7 @@ class Client:
     def __init__(self, broker: Broker) -> None:
         self.__broker = broker
 
-    async def publisher[U](
+    def publisher[U](
         self,
         *,
         routing_key: str,
