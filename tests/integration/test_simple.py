@@ -77,22 +77,22 @@ def receive_waiter_handler(
 
 @pytest.fixture
 async def consumer(
-    rabbitmq_broker: Broker,
+    broker: Broker,
     receive_waiter_consumer: ReceiveWaiterConsumer,
     json_serializer: Serializer[Message[object], Message[bytes]],
     binding_options: BindingOptions,
 ) -> t.AsyncIterator[ReceiveWaiterConsumer]:
-    async with rabbitmq_broker.consumer(receive_waiter_consumer, binding_options, serializer=json_serializer):
+    async with broker.consumer(receive_waiter_consumer, binding_options, serializer=json_serializer):
         yield receive_waiter_consumer
 
 
 @pytest.fixture
 async def publisher(
-    rabbitmq_broker: Broker,
+    broker: Broker,
     json_serializer: Serializer[Message[object], Message[bytes]],
     publisher_options: PublisherOptions,
 ) -> t.AsyncIterator[BinaryPublisher]:
-    async with rabbitmq_broker.publisher(publisher_options, serializer=json_serializer) as pub:
+    async with broker.publisher(publisher_options, serializer=json_serializer) as pub:
         yield pub
 
 

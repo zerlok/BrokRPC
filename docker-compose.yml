@@ -1,4 +1,4 @@
-version: '3.3'
+version: '3.7'
 
 services:
   rabbitmq:
@@ -6,3 +6,8 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+
+  redis:
+    image: redis:7.4.1-alpine
+    ports:
+      - "6379:6379"

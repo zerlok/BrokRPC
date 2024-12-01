@@ -49,7 +49,7 @@ async def test_publisher_consumer_messaging(
 @pytest.fixture
 def publisher_app(
     *,
-    rabbitmq_broker: Broker,
+    broker: Broker,
     publisher_stdin: AsyncStream,
     publisher_stdout: AsyncStream,
     publisher_stderr: AsyncStream,
@@ -58,7 +58,7 @@ def publisher_app(
     raw_encoder: Serializer[BinaryMessage, BinaryMessage],
 ) -> PublisherApp:
     return PublisherApp(
-        broker=rabbitmq_broker,
+        broker=broker,
         options=stub_publisher_options,
         console=Console(publisher_stdin, publisher_stdout, publisher_stderr),
         routing_key=stub_routing_key,
@@ -69,7 +69,7 @@ def publisher_app(
 @pytest.fixture
 def consumer_app(
     *,
-    rabbitmq_broker: Broker,
+    broker: Broker,
     consumer_stdin: AsyncStream,
     consumer_stdout: AsyncStream,
     consumer_stderr: AsyncStream,
@@ -77,7 +77,7 @@ def consumer_app(
     raw_decoder: Serializer[bytes, BinaryMessage],
 ) -> ConsumerApp:
     return ConsumerApp(
-        broker=rabbitmq_broker,
+        broker=broker,
         options=stub_binding_options,
         serializer=raw_decoder,
         console=Console(consumer_stdin, consumer_stdout, consumer_stderr),

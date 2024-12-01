@@ -268,6 +268,11 @@ def connect(options: BrokerConnectOptions) -> t.AsyncContextManager[BrokerDriver
 
         return AiormqBrokerDriver.connect(clean_options)
 
+    elif clean_options.driver == "redis":
+        from brokrpc.driver.redis import RedisBrokerDriver
+
+        return RedisBrokerDriver.connect(clean_options)
+
     else:
         details = "unsupported driver"
         raise ValueError(details, clean_options)

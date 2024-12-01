@@ -35,15 +35,20 @@ def pytest_addoption(parser: Parser) -> None:
         return timedelta(seconds=float(value))
 
     parser.addoption(
-        "--broker-url",
+        "--broker-drivers",
+        type=str,
+        action="append",
+        default=None,
+    )
+    parser.addoption(
+        "--aiormq-url",
         type=URL,
         default=URL("amqp://guest:guest@localhost:5672/"),
     )
     parser.addoption(
-        "--broker-driver",
-        type=str,
-        choices=["aiormq"],
-        default="aiormq",
+        "--redis-url",
+        type=URL,
+        default=URL("redis://localhost:6379/"),
     )
     parser.addoption(
         "--broker-retry-delay",
@@ -73,16 +78,6 @@ def pytest_addoption(parser: Parser) -> None:
     )
 
 
-def parse_broker_options(config: Config) -> BrokerOptions:
-    return BrokerOptions(
-        url=config.getoption("broker_url"),
-        driver=config.getoption("broker_driver"),
-        retry_delay=parse_retry_delay_strategy(config),
-        retries_timeout=config.getoption("broker_retries_timeout"),
-        retries_limit=config.getoption("broker_retries_limit"),
-    )
-
-
 def parse_retry_delay_strategy(config: Config) -> DelayRetryStrategy | None:
     match mode := config.getoption("broker_retry_delay_mode"):
         case "constant":
@@ -108,6 +103,28 @@ def parse_retry_delay_strategy(config: Config) -> DelayRetryStrategy | None:
         case _:
             details = "unknown mode"
             raise ValueError(details, mode)
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("aiormq"),
+        pytest.param("redis"),
+    ],
+)
+def broker_options(request: SubRequest) -> BrokerOptions:
+    driver = request.param
+    drivers = request.config.getoption("broker_drivers", None)
+
+    if drivers is not None and driver not in drivers:
+        pytest.skip(reason=f"driver is not enabled: {driver}")
+
+    return BrokerOptions(
+        url=request.config.getoption(f"{driver}_url"),
+        driver=driver,
+        retry_delay=parse_retry_delay_strategy(request.config),
+        retries_timeout=request.config.getoption("broker_retries_timeout"),
+        retries_limit=request.config.getoption("broker_retries_limit"),
+    )
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ if t.TYPE_CHECKING:
     from types import TracebackType
 
 
-class ErrorTransformer(t.ContextManager[None]):
+class ErrorTransformer(t.ContextManager[None], t.AsyncContextManager[None]):
     def __init__(self) -> None:
         self.__transform = singledispatch(self.__transform_default)
 
@@ -21,15 +21,19 @@ class ErrorTransformer(t.ContextManager[None]):
         traceback: TracebackType | None,
         /,
     ) -> None:
-        if exc_value is None:
-            return
+        self.__handle(exc_value)
 
-        transformed_err = self.__transform(exc_value)
-        if transformed_err is None or transformed_err is exc_value:
-            return
+    async def __aenter__(self) -> None:
+        pass
 
-        else:
-            raise transformed_err from exc_value
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+        /,
+    ) -> None:
+        self.__handle(exc_value)
 
     def register[U: BaseException](
         self,
@@ -51,3 +55,14 @@ class ErrorTransformer(t.ContextManager[None]):
 
     def __transform_default(self, err: BaseException) -> BaseException | None:
         return err
+
+    def __handle(self, err: BaseException | None) -> None:
+        if err is None:
+            return
+
+        transformed_err = self.__transform(err)
+        if transformed_err is None or transformed_err is err:
+            return
+
+        else:
+            raise transformed_err from err
