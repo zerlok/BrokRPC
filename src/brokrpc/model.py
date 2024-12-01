@@ -36,6 +36,10 @@ class BrokerError(BrokRPCError):
     pass
 
 
+class BrokerConnectionError(BrokerError):
+    pass
+
+
 class PublisherError(BrokRPCError):
     pass
 
