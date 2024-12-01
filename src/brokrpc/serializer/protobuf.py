@@ -1,7 +1,6 @@
 import typing as t
 
 from google.protobuf.any_pb2 import Any
-from google.protobuf.json_format import Error, MessageToDict, MessageToJson
 from google.protobuf.message import DecodeError, EncodeError
 from google.protobuf.message import Message as ProtobufMessage
 
@@ -10,7 +9,6 @@ from brokrpc.message import BinaryMessage, Message, PackedMessage, UnpackedMessa
 from brokrpc.model import SerializerDumpError, SerializerLoadError
 from brokrpc.rpc.abc import RPCSerializer
 from brokrpc.rpc.model import BinaryRequest, BinaryResponse, Request, Response
-from brokrpc.serializer.json import JSONSerializer
 
 
 class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[bytes]]):
@@ -57,91 +55,6 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[byte
             original=message,
             body=body,
         )
-
-
-class DictProtobufSerializer[T: ProtobufMessage](Serializer[Message[dict[str, object]], Message[bytes]]):
-    def __init__(self, message_type: type[T]) -> None:
-        self.__message_type = message_type
-        self.__proto = ProtobufSerializer(message_type)
-
-    def dump_message(self, message: Message[dict[str, object]]) -> Message[bytes]:
-        try:
-            payload = self.__message_type(**message.body)
-
-        except (TypeError, ValueError) as err:
-            details = "can't construct protobuf message"
-            raise SerializerDumpError(details, message.body) from err
-
-        return self.__proto.dump_message(PackedMessage(body=payload, original=message))
-
-    def load_message(self, message: Message[bytes]) -> Message[dict[str, object]]:
-        protobuf_message = self.__proto.load_message(message)
-
-        try:
-            dict_payload = MessageToDict(protobuf_message.body, preserving_proto_field_name=True)
-
-        except Error as err:
-            details = "can't covert protobuf message to dict"
-            raise SerializerLoadError(details, protobuf_message.body) from err
-
-        return UnpackedMessage(
-            original=protobuf_message,
-            body=dict_payload,
-        )
-
-
-class JSONProtobufSerializer[T: ProtobufMessage](Serializer[Message[bytes], Message[bytes]]):
-    def __init__(self, message_type: type[T], encoding: str | None = None) -> None:
-        self.__message_type = message_type
-        self.__json = JSONSerializer(encoding=encoding)
-        self.__proto = ProtobufSerializer(message_type)
-
-    def dump_message(self, message: Message[bytes]) -> Message[bytes]:
-        try:
-            json_message = self.__json.load_message(
-                PackedMessage(
-                    body=message.body,
-                    content_type="application/json",
-                    content_encoding=None,
-                    message_type=None,
-                    original=message,
-                )
-            )
-
-        except SerializerLoadError as err:
-            details = "can't load json message"
-            raise SerializerDumpError(details, message) from err
-
-        if not self.__check_json_message(json_message.body):
-            details = "can't dump non object json to protobuf"
-            raise SerializerDumpError(details, json_message)
-
-        try:
-            payload = self.__message_type(**json_message.body)
-
-        except (TypeError, ValueError) as err:
-            details = "can't construct protobuf message"
-            raise SerializerDumpError(details, message.body) from err
-
-        return self.__proto.dump_message(PackedMessage(body=payload, original=message))
-
-    def load_message(self, message: Message[bytes]) -> Message[bytes]:
-        protobuf_message = self.__proto.load_message(message)
-
-        try:
-            json_payload = MessageToJson(protobuf_message.body, preserving_proto_field_name=True, indent=None)
-
-        except Error as err:
-            details = "can't covert protobuf message to json"
-            raise SerializerLoadError(details, protobuf_message.body) from err
-
-        return UnpackedMessage(
-            original=protobuf_message,
-            body=json_payload.encode(),
-        )
-
-    def __check_json_message(self, obj: object) -> t.TypeGuard[dict[str, object]]:
-        return isinstance(obj, dict) and all(isinstance(key, str) for key in obj)
 
 
 class RPCProtobufSerializer[U: ProtobufMessage, V: ProtobufMessage](RPCSerializer[U, V]):

@@ -15,7 +15,7 @@ from brokrpc.abc import Consumer, Serializer
 from brokrpc.broker import Broker
 from brokrpc.message import BinaryMessage
 from brokrpc.model import ConsumerResult
-from brokrpc.options import BindingOptions, BrokerOptions
+from brokrpc.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
 from brokrpc.retry import ConstantDelay, DelayRetryStrategy, ExponentialDelay, MultiplierDelay
 from brokrpc.rpc.abc import RPCSerializer, UnaryUnaryHandler
 from tests.stub.driver import StubBrokerDriver, StubConsumer
@@ -151,13 +151,38 @@ def mock_unary_unary_handler() -> UnaryUnaryHandler[object, object]:
 
 
 @pytest.fixture
-def stub_routing_key(request: SubRequest) -> str:
-    return request.node.name
+def stub_exchange_name(request: SubRequest) -> str:
+    return f"{request.node.originalname}-exchange"
 
 
 @pytest.fixture
-def stub_binding_options(stub_routing_key: str) -> BindingOptions:
-    return BindingOptions(binding_keys=(stub_routing_key,))
+def stub_routing_key(request: SubRequest) -> str:
+    return f"{request.node.originalname}-rk"
+
+
+@pytest.fixture
+def stub_queue_name(request: SubRequest) -> str:
+    return f"{request.node.originalname}-queue"
+
+
+@pytest.fixture
+def stub_publisher_options(stub_exchange_name: str) -> PublisherOptions:
+    return PublisherOptions(
+        name=stub_exchange_name,
+        auto_delete=True,
+    )
+
+
+@pytest.fixture
+def stub_binding_options(stub_exchange_name: str, stub_routing_key: str, stub_queue_name: str) -> BindingOptions:
+    return BindingOptions(
+        exchange=ExchangeOptions(name=stub_exchange_name, auto_delete=True),
+        binding_keys=(stub_routing_key,),
+        queue=QueueOptions(
+            name=stub_queue_name,
+            auto_delete=True,
+        ),
+    )
 
 
 @pytest.fixture

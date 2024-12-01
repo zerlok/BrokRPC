@@ -60,6 +60,7 @@ class Broker(t.AsyncContextManager["Broker"]):
             ConsumerMiddleware[BinaryConsumer, BinaryMessage, ConsumerResult]
         ] = default_consumer_middlewares or ()
 
+        self.__cm_enter_count = 0
         self.__stack = AsyncExitStack()
         self.__lock = asyncio.Lock()
         self.__opened = asyncio.Event()
@@ -85,10 +86,15 @@ class Broker(t.AsyncContextManager["Broker"]):
 
     async def __aenter__(self) -> t.Self:
         await self.connect()
+        self.__cm_enter_count += 1
+
         return self
 
     async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> bool | None:
-        await self.disconnect()
+        self.__cm_enter_count -= 1
+        if self.__cm_enter_count <= 0:
+            await self.disconnect()
+
         return None
 
     async def connect(self) -> None:
