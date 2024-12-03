@@ -86,6 +86,7 @@ ignore = [
 "tests/**" = [
     "ARG001", # it's ok to use a fixture with a side effect in a test.
     "PT004", # fixture may add side effect and doesn't return anything.
+    "PLR0913", # test functions & fixtures may have a lot of arguments.
 ]
 
 
