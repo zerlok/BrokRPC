@@ -3,34 +3,39 @@ from __future__ import annotations
 import asyncio
 import logging
 import typing as t
-from asyncio import TaskGroup
-from contextlib import asynccontextmanager, nullcontext
-from datetime import datetime, timedelta
+from contextlib import asynccontextmanager, nullcontext, suppress
 from uuid import uuid4
 
+from redis import ConnectionError as RedisConnectionError
 from redis import RedisError
 from redis.asyncio import Redis
-from redis.asyncio.client import PubSub
+
+if t.TYPE_CHECKING:
+    from datetime import datetime, timedelta
+    from types import TracebackType
+
+    from redis.asyncio.client import PubSub
 
 from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, BrokerDriver, Publisher
 from brokrpc.errors import ErrorTransformer
 from brokrpc.message import BinaryMessage, Message
-from brokrpc.model import BrokerConnectionError, PublisherResult
+from brokrpc.model import BrokerConnectionError, BrokerError, PublisherResult
 from brokrpc.options import BindingOptions, BrokerOptions, PublisherOptions
 from brokrpc.retry import RetryerError, create_delay_retryer
 from brokrpc.stringify import to_str_obj
 
 _ERROR_TRANSFORMER = ErrorTransformer()
 
-# TODO: transform redis errors to BrokerError
-# @_ERROR_TRANSFORMER.register
-# def _transform_conn_err(err: Exception) -> BrokerConnectionError:
-#     return BrokerConnectionError(str(err))
-#
-#
-# @_ERROR_TRANSFORMER.register
-# def _transform_generic_err(err: Exception) -> BrokerError:
-#     return BrokerError(str(err))
+
+# TODO: check redis error transformation
+@_ERROR_TRANSFORMER.register
+def _transform_conn_err(err: RedisConnectionError) -> BrokerConnectionError:
+    return BrokerConnectionError(str(err))
+
+
+@_ERROR_TRANSFORMER.register
+def _transform_generic_err(err: RedisError) -> BrokerError:
+    return BrokerError(str(err))
 
 
 class RedisPubSubSubscribeCommand(t.TypedDict):
@@ -110,15 +115,15 @@ class RedisMessage(Message[bytes]):
 
     @property
     def routing_key(self) -> str:
-        return "routing_key"
+        return self.__impl["channel"].decode()
 
     @property
     def exchange(self) -> str | None:
-        return "exchange"
+        return None
 
     @property
     def content_type(self) -> str | None:
-        return "content_type"
+        return None
 
     @property
     def content_encoding(self) -> str | None:
@@ -172,7 +177,7 @@ class RedisMessage(Message[bytes]):
 class RedisPublisher(Publisher[BinaryMessage, PublisherResult]):
     def __init__(
         self,
-        redis: Redis,
+        redis: Redis[bytes],
         options: PublisherOptions | None,
         message_id_gen: t.Callable[[], str | None],
     ) -> None:
@@ -182,24 +187,67 @@ class RedisPublisher(Publisher[BinaryMessage, PublisherResult]):
 
     @_ERROR_TRANSFORMER.wrap
     async def publish(self, message: BinaryMessage) -> PublisherResult:
+        # TODO: find a way to pass RPC metadata with redis message. JSON & protobuf imposes additional dependencies to
+        #  server & client. Also, keep in mind RPC abstraction from language implementations (not python only).
+        assert message.correlation_id is None
+        assert message.reply_to is None
         await self.__redis.publish(message.routing_key, message.body)
         return None
 
 
-class RedisSubscriber:
-    def __init__(self, pubsub: PubSub, consumer: BinaryConsumer, done: asyncio.Event) -> None:
+class RedisSubscriber(t.AsyncContextManager["RedisSubscriber"], BoundConsumer):
+    def __init__(
+        self,
+        pubsub: PubSub,
+        consumer: BinaryConsumer,
+        options: BindingOptions,
+    ) -> None:
         self.__pubsub = pubsub
         self.__consumer = consumer
-        self.__done = done
+        self.__options = options
 
-    async def run(self) -> None:
+        self.__task: asyncio.Task[None] | None = None
+
+    async def __aenter__(self) -> t.Self:
+        if self.__task is not None:
+            raise RuntimeError
+
+        await self.__pubsub.subscribe(*self.__options.binding_keys)
+        self.__task = asyncio.create_task(self.__run())
+
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+        /,
+    ) -> None:
+        try:
+            # Redis automatically handles message dispatch, so no need for manual consumer cancellation
+            await self.__pubsub.unsubscribe()
+
+        finally:
+            task, self.__task = self.__task, None
+
+            # TODO: stop consumer task gracefully
+            if task is not None:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+
+    def is_alive(self) -> bool:
+        return bool(self.__pubsub.subscribed) and self.__task is not None and not self.__task.done()
+
+    def get_options(self) -> BindingOptions:
+        return self.__options
+
+    @_ERROR_TRANSFORMER.wrap
+    async def __run(self) -> None:
         cmd: RedisPubSubCommand
 
-        # todo: wait for command or done event
         async for cmd in self.__pubsub.listen():
-            if self.__done.is_set():
-                return
-
             assert isinstance(cmd, dict)  # todo: ensure typing is valid
 
             if cmd["type"] == "subscribe":
@@ -229,26 +277,6 @@ class RedisSubscriber:
                 t.assert_never(cmd["type"])
 
 
-class RedisBoundConsumer(BoundConsumer):
-    def __init__(
-        self,
-        redis: Redis,
-        pubsub: PubSub,
-        subscriber: RedisSubscriber,
-        options: BindingOptions,
-    ) -> None:
-        self.__redis = redis
-        self.__pubsub = pubsub
-        self.__subscriber = subscriber
-        self.__options = options
-
-    def is_alive(self) -> bool:
-        return bool(self.__pubsub.subscribed)
-
-    def get_options(self) -> BindingOptions:
-        return self.__options
-
-
 # TODO: consider streams https://redis.readthedocs.io/en/latest/examples/redis-stream-example.html
 class RedisBrokerDriver(BrokerDriver):
     @classmethod
@@ -263,7 +291,7 @@ class RedisBrokerDriver(BrokerDriver):
             on_attempt_error=log_warning,
         )
 
-        redis = Redis.from_url(str(options.url))
+        redis: Redis[bytes] = Redis.from_url(str(options.url))
         with _ERROR_TRANSFORMER:
             try:
                 await retryer.do(redis.initialize)
@@ -276,7 +304,7 @@ class RedisBrokerDriver(BrokerDriver):
             finally:
                 await redis.close()
 
-    def __init__(self, redis: Redis) -> None:
+    def __init__(self, redis: Redis[bytes]) -> None:
         self.__redis = redis
 
     def __str__(self) -> str:
@@ -287,20 +315,12 @@ class RedisBrokerDriver(BrokerDriver):
 
     @asynccontextmanager
     async def bind_consumer(self, consumer: BinaryConsumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
-        async with _ERROR_TRANSFORMER, self.__redis.pubsub() as pubsub, TaskGroup() as tg:
-            done = asyncio.Event()
-
-            subscriber = RedisSubscriber(pubsub, consumer, done)
-            try:
-                await pubsub.subscribe(*options.binding_keys)
-                tg.create_task(subscriber.run())
-
-                yield RedisBoundConsumer(self.__redis, pubsub, subscriber, options)
-
-            finally:
-                # Redis automatically handles message dispatch, so no need for manual consumer cancellation
-                await pubsub.unsubscribe()
-                done.set()
+        async with (
+            _ERROR_TRANSFORMER,
+            self.__redis.pubsub() as pubsub,
+            RedisSubscriber(pubsub, consumer, options) as subscriber,
+        ):
+            yield subscriber
 
     def __gen_message_id(self) -> str:
         return uuid4().hex
