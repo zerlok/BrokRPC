@@ -177,7 +177,7 @@ class RedisMessage(Message[bytes]):
 class RedisPublisher(Publisher[BinaryMessage, PublisherResult]):
     def __init__(
         self,
-        redis: Redis[bytes],
+        redis: Redis,
         options: PublisherOptions | None,
         message_id_gen: t.Callable[[], str | None],
     ) -> None:
@@ -291,7 +291,7 @@ class RedisBrokerDriver(BrokerDriver):
             on_attempt_error=log_warning,
         )
 
-        redis: Redis[bytes] = Redis.from_url(str(options.url))
+        redis: Redis = Redis.from_url(str(options.url))
         with _ERROR_TRANSFORMER:
             try:
                 await retryer.do(redis.initialize)
@@ -302,9 +302,9 @@ class RedisBrokerDriver(BrokerDriver):
                 raise BrokerConnectionError(details, options) from err
 
             finally:
-                await redis.close()
+                await redis.aclose()
 
-    def __init__(self, redis: Redis[bytes]) -> None:
+    def __init__(self, redis: Redis) -> None:
         self.__redis = redis
 
     def __str__(self) -> str:

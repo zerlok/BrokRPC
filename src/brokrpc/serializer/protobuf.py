@@ -65,7 +65,8 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[byte
 
     @cached_property
     def __message_qualname(self) -> str:
-        return self.__message_type.DESCRIPTOR.full_name
+        # NOTE: actual type of full_name in message descriptor is str.
+        return t.cast(str, self.__message_type.DESCRIPTOR.full_name)
 
 
 class RPCProtobufSerializer[U: ProtobufMessage, V: ProtobufMessage](RPCSerializer[U, V]):
