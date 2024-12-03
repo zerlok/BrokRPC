@@ -13,10 +13,12 @@ class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[
 
     def __init__(
         self,
+        *,
         encoder: JSONEncoder | None = None,
         decoder: JSONDecoder | None = None,
         encoding: str | None = None,
         default: t.Callable[[object], object] | None = None,
+        strict: bool = False,
     ) -> None:
         self.__encoder = (
             encoder
@@ -29,6 +31,7 @@ class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[
         )
         self.__decoder = decoder if decoder is not None else JSONDecoder()
         self.__encoding = encoding if encoding is not None else "utf-8"
+        self.__strict = strict
 
     def dump_message(self, message: Message[object]) -> PackedMessage[bytes]:
         encoding = message.content_encoding if message.content_encoding is not None else self.__encoding
@@ -63,7 +66,7 @@ class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[
         return self.load_message(response)
 
     def __load(self, message: BinaryMessage) -> object:
-        if message.content_type != self.__CONTENT_TYPE:
+        if message.content_type != self.__CONTENT_TYPE and (self.__strict or message.content_type is not None):
             details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)
 

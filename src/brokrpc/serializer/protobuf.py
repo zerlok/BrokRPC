@@ -1,4 +1,5 @@
 import typing as t
+from functools import cached_property
 
 from google.protobuf.any_pb2 import Any
 from google.protobuf.message import DecodeError, EncodeError
@@ -14,8 +15,14 @@ from brokrpc.rpc.model import BinaryRequest, BinaryResponse, Request, Response
 class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[bytes]]):
     __CONTENT_TYPE: t.Final[str] = "application/protobuf"
 
-    def __init__(self, message_type: type[T]) -> None:
+    def __init__(
+        self,
+        message_type: type[T],
+        *,
+        strict: bool = False,
+    ) -> None:
         self.__message_type = message_type
+        self.__strict = strict
 
     def dump_message(self, message: Message[T]) -> PackedMessage[bytes]:
         assert isinstance(message.body, self.__message_type)
@@ -32,15 +39,15 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[byte
             body=body,
             content_type=self.__CONTENT_TYPE,
             content_encoding=None,
-            message_type=message.body.DESCRIPTOR.full_name,
+            message_type=self.__message_qualname,
         )
 
     def load_message(self, message: BinaryMessage) -> UnpackedMessage[T]:
-        if message.content_type != self.__CONTENT_TYPE:
+        if message.content_type != self.__CONTENT_TYPE and (self.__strict or message.content_type is not None):
             details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)
 
-        if message.message_type != self.__message_type.DESCRIPTOR.full_name:
+        if message.message_type != self.__message_qualname and (self.__strict or message.message_type is not None):
             details = f"invalid message type: {message.message_type}"
             raise SerializerLoadError(details, message)
 
@@ -56,11 +63,15 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[byte
             body=body,
         )
 
+    @cached_property
+    def __message_qualname(self) -> str:
+        return self.__message_type.DESCRIPTOR.full_name
+
 
 class RPCProtobufSerializer[U: ProtobufMessage, V: ProtobufMessage](RPCSerializer[U, V]):
-    def __init__(self, request_type: type[U], response_type: type[V]) -> None:
-        self.__request = ProtobufSerializer(request_type)
-        self.__response = ProtobufSerializer(response_type)
+    def __init__(self, request_type: type[U], response_type: type[V], *, strict: bool = False) -> None:
+        self.__request = ProtobufSerializer(request_type, strict=strict)
+        self.__response = ProtobufSerializer(response_type, strict=strict)
 
     def dump_unary_request(self, request: Request[U]) -> BinaryRequest:
         return self.__request.dump_message(request)
