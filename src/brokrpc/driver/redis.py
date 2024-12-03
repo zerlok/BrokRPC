@@ -16,11 +16,12 @@ if t.TYPE_CHECKING:
 
     from redis.asyncio.client import PubSub
 
+    from brokrpc.options import BindingOptions, BrokerOptions, PublisherOptions
+
 from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, BrokerDriver, Publisher
 from brokrpc.errors import ErrorTransformer
 from brokrpc.message import BinaryMessage, Message
 from brokrpc.model import BrokerConnectionError, BrokerError, PublisherResult
-from brokrpc.options import BindingOptions, BrokerOptions, PublisherOptions
 from brokrpc.retry import RetryerError, create_delay_retryer
 from brokrpc.stringify import to_str_obj
 
