@@ -5,19 +5,19 @@ import logging
 import typing as t
 from contextlib import asynccontextmanager, nullcontext, suppress
 from dataclasses import replace
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from redis import ConnectionError as RedisConnectionError
 from redis import RedisError
 from redis.asyncio import Redis
+from redis.asyncio.retry import Retry
+from redis.backoff import ConstantBackoff
 
 if t.TYPE_CHECKING:
-    from datetime import datetime, timedelta
     from types import TracebackType
 
     from redis.asyncio.client import PubSub
-
-    from brokrpc.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
 
 from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, BrokerDriver, Publisher
 from brokrpc.errors import ErrorTransformer
@@ -30,7 +30,7 @@ from brokrpc.model import (
     ConsumerRetry,
     PublisherResult,
 )
-from brokrpc.retry import RetryerError, create_delay_retryer
+from brokrpc.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
 from brokrpc.stringify import to_str_obj
 
 _ERROR_TRANSFORMER = ErrorTransformer()
@@ -328,13 +328,31 @@ class RedisStreamMessage(Message[bytes]):
         return self.__app_id
 
 
-def _dump_key(exchange: str | None, routing_key: str) -> str:
-    return routing_key if not exchange else f"{exchange}:{routing_key}"
+@t.overload
+def _dump_key(options: BindingOptions) -> bytes: ...
+
+
+@t.overload
+def _dump_key(options: str | ExchangeOptions | None, routing_key: str) -> bytes: ...
+
+
+def _dump_key(options: str | ExchangeOptions | BindingOptions | None, routing_key: str | None = None) -> bytes:
+    exchange_name = (
+        options.exchange.name
+        if isinstance(options, BindingOptions) and options.exchange is not None
+        else options.name
+        if isinstance(options, ExchangeOptions)
+        else options
+    )
+    rk = options.queue.name if isinstance(options, BindingOptions) and options.queue is not None else routing_key
+    assert rk is not None
+
+    return rk.encode() if not exchange_name else f"{exchange_name}:{rk}".encode()
 
 
 def _extract_key(key: bytes) -> tuple[str | None, str]:
-    *other, routing_key = key.decode().split(":", maxsplit=1)
-    return other[0] if other else None, routing_key
+    *other, rk = key.decode().split(":", maxsplit=1)
+    return other[0] if other else None, rk
 
 
 class RedisPubSubPublisher(Publisher[BinaryMessage, PublisherResult]):
@@ -354,7 +372,7 @@ class RedisPubSubPublisher(Publisher[BinaryMessage, PublisherResult]):
         #  server & client. Also, keep in mind RPC abstraction from language implementations (not python only).
         assert message.correlation_id is None
         assert message.reply_to is None
-        await self.__redis.publish(_dump_key(message.exchange, message.routing_key), message.body)
+        await self.__redis.publish(_dump_key(message.exchange or self.__options, message.routing_key), message.body)
         return None
 
 
@@ -369,11 +387,8 @@ class RedisStreamPublisher(Publisher[BinaryMessage, PublisherResult]):
 
     @_ERROR_TRANSFORMER.wrap
     async def publish(self, message: BinaryMessage) -> PublisherResult:
-        # Publish to the Redis stream
-        # assert message.correlation_id is None
-        # assert message.reply_to is None
         await self.__redis.xadd(
-            name=_dump_key(message.exchange, message.routing_key),
+            name=_dump_key(message.exchange or self.__options, message.routing_key),
             fields={
                 b"body": message.body,
                 b"content_type": message.content_type or b"",
@@ -483,7 +498,6 @@ class RedisStreamConsumerGroupSubscriber(t.AsyncContextManager["RedisStreamConsu
         redis: Redis,
         consumer: BinaryConsumer,
         options: BindingOptions,
-        consumer_key: str,
         consumer_group_id: str,
         consumer_id: str,
     ) -> None:
@@ -491,14 +505,14 @@ class RedisStreamConsumerGroupSubscriber(t.AsyncContextManager["RedisStreamConsu
         self.__consumer = consumer
         self.__options = replace(
             options,
-            exchange=replace(
-                options.exchange if options.exchange is not None else ExchangeOptions(), name=consumer_key
-            ),
             queue=replace(options.queue if options.queue is not None else QueueOptions(), name=consumer_group_id),
         )
-        self.__consumer_key = consumer_key
         self.__consumer_group_id = consumer_group_id
         self.__consumer_id = consumer_id
+        # TODO: make stream ID configurable?
+        self.__streams: dict[bytes, bytes] = {
+            _dump_key(self.__options.exchange, key): b">" for key in self.__options.binding_keys
+        }
 
         self.__task: asyncio.Task[None] | None = None
 
@@ -507,17 +521,21 @@ class RedisStreamConsumerGroupSubscriber(t.AsyncContextManager["RedisStreamConsu
         if self.__task is not None:
             raise RuntimeError
 
-        # Create the consumer group if it doesn't exist
-        # TODO: suppress only group already exists error
-        with suppress(RedisError):
-            # TODO: get deeper understanding of stream arg passed to XGROUP CREATE & stream args passed to XREADGROUP
-            #  https://github.com/redis/redis/issues/9523 - may help
-            await self.__redis.xgroup_create(
-                name=self.__consumer_key,
-                groupname=self.__consumer_group_id,
-                # id="0",
-                mkstream=True,
-            )
+        # TODO: get deeper understanding of stream arg passed to XGROUP CREATE & stream args passed to XREADGROUP
+        #  https://github.com/redis/redis/issues/9523 - may help
+        #  https://github.com/redis/redis/discussions/13680
+        await asyncio.gather(
+            *(
+                self.__redis.xgroup_create(
+                    name=stream,
+                    groupname=self.__consumer_group_id,
+                    mkstream=True,
+                )
+                for stream in self.__streams
+            ),
+            # TODO: suppress only `group already exists error`
+            return_exceptions=True,
+        )
 
         self.__task = asyncio.create_task(self.__run())
 
@@ -548,16 +566,17 @@ class RedisStreamConsumerGroupSubscriber(t.AsyncContextManager["RedisStreamConsu
     @_ERROR_TRANSFORMER.wrap
     async def __run(self) -> None:
         while True:
-            # Read from the stream using XREADGROUP
             read_response = await self.__redis.xreadgroup(
                 groupname=self.__consumer_group_id,
                 consumername=self.__consumer_id,
-                streams={key: ">" for key in self.__options.binding_keys},
+                # FIXME: remove type ignore here
+                streams=self.__streams,  # type: ignore[arg-type]
                 count=self.__options.queue.prefetch_count if self.__options.queue is not None else 1,
-                block=0,
+                # TODO: make it configurable
+                block=300_000,  # 5 minutes
             )
 
-            for message in self.__extract_messages(read_response):
+            for stream, stream_id, message in self.__extract_messages(read_response):
                 try:
                     consumer_result = await self.__consumer.consume(message)
 
@@ -567,46 +586,52 @@ class RedisStreamConsumerGroupSubscriber(t.AsyncContextManager["RedisStreamConsu
                 else:
                     match consumer_result:
                         case ConsumerAck() | True | None:
-                            # Acknowledge the message
-                            await self.__redis.xack(self.__consumer_key, self.__consumer_group_id, message.message_id)
+                            await self.__redis.xack(stream, self.__consumer_group_id, stream_id)
+                            self.__streams[stream] = stream_id
 
                         case ConsumerReject() | False:
                             # TODO: reject message
                             pass
 
-                        case ConsumerRetry(delay=delay):
+                        case ConsumerRetry():
                             # TODO: retry message consumption with delay
                             pass
 
     def __extract_messages(
         self,
-        response: t.Sequence[tuple[bytes, t.Sequence[tuple[bytes, t.Mapping[bytes, bytes | str | int | float]]]]],
-    ) -> t.Iterable[RedisStreamMessage]:
+        response: t.Sequence[tuple[bytes, t.Sequence[tuple[bytes, t.Mapping[bytes, bytes]]]]],
+    ) -> t.Iterable[tuple[bytes, bytes, RedisStreamMessage]]:
         for key, messages in response:
             exchange, routing_key = _extract_key(key)
 
             for message_id, fields in messages:
-                yield RedisStreamMessage(
-                    body=fields[b"body"],
-                    routing_key=routing_key,
-                    exchange=exchange,
-                    content_type=fields[b"content_type"].decode() if fields[b"content_type"] else None,
-                    content_encoding=fields[b"content_encoding"].decode() if fields[b"content_encoding"] else None,
-                    headers={
-                        key[len(b"header.") :].decode(): value.decode()
-                        for key, value in fields.items()
-                        if key.startswith(b"header.")
-                    },
-                    delivery_mode=fields[b"delivery_mode"] or None,
-                    priority=fields[b"priority"] or None,
-                    correlation_id=fields[b"correlation_id"].decode() if fields[b"correlation_id"] else None,
-                    reply_to=fields[b"reply_to"].decode() if fields[b"reply_to"] else None,
-                    # timeout=fields[b"timeout"],
-                    message_id=message_id.decode(),
-                    timestamp=datetime.fromisoformat(fields[b"timestamp"].decode()) if fields[b"timestamp"] else None,
-                    message_type=fields[b"message_type"].decode() if fields[b"message_type"] else None,
-                    user_id=fields[b"user_id"].decode() if fields[b"user_id"] else None,
-                    app_id=fields[b"app_id"].decode() if fields[b"app_id"] else None,
+                yield (
+                    key,
+                    message_id,
+                    RedisStreamMessage(
+                        body=fields[b"body"],
+                        routing_key=routing_key,
+                        exchange=exchange,
+                        content_type=fields[b"content_type"].decode() if fields[b"content_type"] else None,
+                        content_encoding=fields[b"content_encoding"].decode() if fields[b"content_encoding"] else None,
+                        headers={
+                            key[len(b"header.") :].decode(): value.decode()
+                            for key, value in fields.items()
+                            if key.startswith(b"header.")
+                        },
+                        delivery_mode=int.from_bytes(fields[b"delivery_mode"]) if fields[b"delivery_mode"] else None,
+                        priority=int.from_bytes(fields[b"priority"]) if fields[b"delivery_mode"] else None,
+                        correlation_id=fields[b"correlation_id"].decode() if fields[b"correlation_id"] else None,
+                        reply_to=fields[b"reply_to"].decode() if fields[b"reply_to"] else None,
+                        # TODO: add timeout,
+                        message_id=message_id.decode(),
+                        timestamp=datetime.fromisoformat(fields[b"timestamp"].decode())
+                        if fields[b"timestamp"]
+                        else None,
+                        message_type=fields[b"message_type"].decode() if fields[b"message_type"] else None,
+                        user_id=fields[b"user_id"].decode() if fields[b"user_id"] else None,
+                        app_id=fields[b"app_id"].decode() if fields[b"app_id"] else None,
+                    ),
                 )
 
 
@@ -617,24 +642,20 @@ class RedisBrokerDriver(BrokerDriver):
     @classmethod
     @asynccontextmanager
     async def connect(cls, options: BrokerOptions) -> t.AsyncIterator[RedisBrokerDriver]:
-        def log_warning(err: Exception) -> None:
-            logging.warning("can't connect to redis", exc_info=err)
-
-        retryer = create_delay_retryer(
-            options=options,
-            errors=(ConnectionError, RedisError),
-            on_attempt_error=log_warning,
+        redis: Redis = Redis.from_url(
+            url=str(options.url),
+            retry=Retry(
+                backoff=ConstantBackoff(backoff=3.0),
+                retries=10,
+                # TODO: use our retry with logging, adapt it to redis error
+                supported_errors=(RedisConnectionError, ConnectionError),  # type: ignore[arg-type]
+            ),
         )
 
-        redis: Redis = Redis.from_url(str(options.url))
         with _ERROR_TRANSFORMER:
             try:
-                await retryer.do(redis.initialize)
+                await redis.initialize()
                 yield cls(redis)
-
-            except RetryerError as err:
-                details = "can't connect to redis"
-                raise BrokerConnectionError(details, options) from err
 
             finally:
                 await redis.aclose()
@@ -650,6 +671,10 @@ class RedisBrokerDriver(BrokerDriver):
 
     @asynccontextmanager
     async def bind_consumer(self, consumer: BinaryConsumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
+        # TODO: use PubSub if queue is not set (no consumer groups)
+        assert options.queue is not None
+        assert options.queue.name
+
         async with (
             _ERROR_TRANSFORMER,
             # self.__redis.pubsub() as pubsub,
@@ -657,8 +682,8 @@ class RedisBrokerDriver(BrokerDriver):
                 self.__redis,
                 consumer,
                 options,
-                consumer_key="my-key",
                 consumer_group_id=options.queue.name,
+                # TODO: make it configurable
                 consumer_id="my-consumer",
             ) as subscriber,
         ):

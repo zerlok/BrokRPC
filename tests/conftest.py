@@ -1,5 +1,6 @@
 import typing as t
 from contextlib import nullcontext
+from dataclasses import asdict
 from datetime import timedelta
 from unittest.mock import create_autospec
 
@@ -183,22 +184,36 @@ def stub_queue_name(request: SubRequest) -> str:
 
 
 @pytest.fixture
-def stub_publisher_options(stub_exchange_name: str) -> PublisherOptions:
-    return PublisherOptions(
+def stub_exchange(stub_exchange_name: str) -> ExchangeOptions:
+    return ExchangeOptions(
         name=stub_exchange_name,
         auto_delete=True,
     )
 
 
 @pytest.fixture
-def stub_binding_options(stub_exchange_name: str, stub_routing_key: str, stub_queue_name: str) -> BindingOptions:
+def stub_queue(stub_queue_name: str) -> QueueOptions:
+    return QueueOptions(
+        name=stub_queue_name,
+        auto_delete=True,
+    )
+
+
+@pytest.fixture
+def stub_publisher_options(stub_exchange: ExchangeOptions) -> PublisherOptions:
+    return PublisherOptions(**asdict(stub_exchange))
+
+
+@pytest.fixture
+def stub_binding_options(
+    stub_exchange: ExchangeOptions,
+    stub_routing_key: str,
+    stub_queue: QueueOptions,
+) -> BindingOptions:
     return BindingOptions(
-        exchange=ExchangeOptions(name=stub_exchange_name, auto_delete=True),
+        exchange=stub_exchange,
         binding_keys=(stub_routing_key,),
-        queue=QueueOptions(
-            name=stub_queue_name,
-            auto_delete=True,
-        ),
+        queue=stub_queue,
     )
 
 
