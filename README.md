@@ -12,13 +12,14 @@ message brokers.
 
 ## key features
 
+* builtin CLI to work with broker
 * same protobuf structures as in gRPC
 * similar calls as in gRPC
   * unary-unary
   * (TODO) unary-stream
   * (TODO) stream-unary
   * (TODO) stream-stream
-* declarative style, abstract from broker commands (such as declare_exchange / queue_bind)
+* resource declarative style, no broker commands (just `async with broker.publisher(...)` or `async with broker.consumer(...)`)
 * publisher & consumer middlewares
 * message serializers
 
@@ -30,27 +31,56 @@ pyprotostuben project example for more details.
 
 You may configure codegen output using protobuf extensions from [buf schema registry](https://buf.build/zerlok/brokrpc).
 
-## supported brokers & protocols
+## drivers
 
-* [AMQP](https://www.rabbitmq.com/tutorials/amqp-concepts)
-  * [aiormq](https://github.com/mosquito/aiormq)
-* (TODO) redis
-* (TODO) kafka
-* (TODO) NATS
+| driver     | broker   |
+|------------|----------|
+| `aiormq`   | RabbitMQ |
+| `aioredis` | Redis    |
+| (TODO)     | Kafka    |
+| (TODO)     | NATs     |
 
 ## usage
 
 [pypi package](https://pypi.python.org/pypi/BrokRPC)
 
-install with your favorite python package manager
+install with your favorite python package manager, specify driver in extra (e.g. for `aiormq`):
 
 ```shell
 pip install BrokRPC[aiormq]
 ```
 
+### CLI
+
+`brokrpc` commands either publish messages from stdin or prints consumed messages to stdout. See help for more info.
+
+```shell
+brokrpc --help
+```
+
+#### examples
+
+Start JSON publisher (press `ctrl+d` to stop):
+
+```shell
+brokrpc amqp://guest:guest@localhost:5672/ publish -e my-exchange my-rk --encoder=json
+```
+
+Start JSON consumer (press `ctrl+d` to stop):
+
+```shell
+brokrpc amqp://guest:guest@localhost:5672/ consume -e my-exchange my-rk --decoder=json
+```
+
+Check broker connection (returns `0` exit code on success and `1` on failure):
+
+```shell
+brokrpc --retry-delay=3 --retries-limit=10 amqp://guest:guest@localhost:5672/ check
+```
+
 ### Broker
 
-use Broker as high level API to create consumers & publishers
+Broker class is a part of high-level API. All consumers & publishers are created via this class.
 
 ```python
 from brokrpc.broker import Broker
@@ -61,6 +91,10 @@ async with Broker(...) as broker:
     # work with broker
     ...
 ```
+
+### BrokerDriver
+
+Driver is a part of low-level API. Broker delegates calls to driver.
 
 ### Consumer
 
@@ -75,7 +109,7 @@ from brokrpc.serializer.json import JSONSerializer
 async def register_consumer(broker: Broker) -> None:
     # define consumer function (you also can use async function & `Consumer` interface).
     def consume_binary_message(message: Message[bytes]) -> None:
-      print(message)
+        print(message)
   
     # consumer is not attached yet
   
@@ -204,7 +238,7 @@ async def main() -> None:
 
     # connect to broker
     async with broker:
-        # start RPC server until SIGINT or SIGTERM
+        # run RPC server until SIGINT or SIGTERM
         await server.run_until_terminated()
 
 

@@ -41,8 +41,9 @@
         class Bar:
             pass
 
+  # FIXME: this prevents mypy errors on 3rd-party libs during tests. Find a way to avoid mypy config patching & error ignore.
   mypy_config: |-
-    [mypy-aiormq.*,pamqp.*,pkg_resources.*]
+    [mypy-aiormq.*,pamqp.*,pkg_resources.*,cryptography.*,redis.*]
     ignore_missing_imports = True
     ignore_errors = True
 
@@ -88,8 +89,9 @@
         class Bar:
             pass
 
+  # FIXME: this prevents mypy errors on 3rd-party libs during tests. Find a way to avoid mypy config patching & error ignore.
   mypy_config: |-
-    [mypy-aiormq.*,pamqp.*,pkg_resources.*]
+    [mypy-aiormq.*,pamqp.*,pkg_resources.*,cryptography.*,redis.*]
     ignore_missing_imports = True
     ignore_errors = True
 

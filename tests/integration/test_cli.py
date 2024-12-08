@@ -1,132 +1,138 @@
 import asyncio
-import typing as t
-from argparse import ArgumentParser
+from asyncio import TaskGroup
 
 import pytest
 
-from brokrpc.cli import CLIOptions, build_parser, run
-from brokrpc.options import BrokerOptions
+from brokrpc.abc import Serializer
+from brokrpc.broker import Broker
+from brokrpc.cli import AsyncStream, Console, ConsumerApp, PublisherApp
+from brokrpc.message import BinaryMessage
+from brokrpc.options import BindingOptions, PublisherOptions
 from tests.stub.stream import InMemoryStream
 
 
 @pytest.mark.parametrize("body", [b"test-cli-body"])
 async def test_publisher_consumer_messaging(
-    consumer: asyncio.Task[int],
-    publisher: asyncio.Task[int],
-    publisher_options: CLIOptions,
-    consumer_options: CLIOptions,
+    *,
+    consumer_app: ConsumerApp,
+    consumer_stdin: AsyncStream,
+    consumer_stdout: AsyncStream,
+    consumer_stderr: AsyncStream,
+    publisher_app: PublisherApp,
+    publisher_stdin: AsyncStream,
+    publisher_stderr: AsyncStream,
     body: bytes,
 ) -> None:
-    await asyncio.sleep(1.0)  # wait for consumer is registered
-    await publisher_options.input.write(body)
-    await publisher_options.input.close()
+    async with TaskGroup() as tg:
+        tg.create_task(consumer_app.run())
+        tg.create_task(publisher_app.run())
 
-    await asyncio.sleep(1.0)  # wait for message consumption
-    consumer_options.done.set()
+        # wait for consumer is registered
+        await asyncio.sleep(1.0)
 
-    await asyncio.gather(publisher, consumer)
+        # publish message
+        await publisher_stdin.write(body + b"\n")
+        await publisher_stdin.flush()
+        await publisher_stdin.close()
 
-    publisher_logs = await publisher_options.err.readlines()
-    consumer_output = await consumer_options.output.readlines()
+        # wait for message consumption
+        await asyncio.sleep(1.0)
+        await consumer_stdin.close()
 
-    assert publisher_logs == [b"sent"]
-    assert consumer_output == [body]
+    publisher_logs = await publisher_stderr.readlines()
+    consumer_output = await consumer_stdout.readlines()
+    consumer_logs = await consumer_stderr.readlines()
 
-
-@pytest.fixture
-def publisher(event_loop: asyncio.AbstractEventLoop, publisher_options: CLIOptions) -> t.Iterator[asyncio.Task[int]]:
-    task = event_loop.create_task(run(publisher_options))
-    try:
-        yield task
-
-    finally:
-        if not task.done():
-            task.cancel()
+    assert (publisher_logs, consumer_output, consumer_logs) == ([b"message sent"], [body], [b"message consumed"])
 
 
 @pytest.fixture
-def consumer(event_loop: asyncio.AbstractEventLoop, consumer_options: CLIOptions) -> t.Iterator[asyncio.Task[int]]:
-    task = event_loop.create_task(run(consumer_options))
-    try:
-        yield task
-
-    finally:
-        if not task.done():
-            task.cancel()
-
-
-@pytest.fixture
-def parser() -> ArgumentParser:
-    parser = build_parser()
-
-    # NOTE: raise exceptions instead of `sys.exit`
-    parser.exit_on_error = False  # type: ignore[attr-defined]
-
-    return parser
-
-
-@pytest.fixture
-def routing_key() -> str:
-    return "test-cli-messaging"
-
-
-@pytest.fixture
-def exchange_name() -> str:
-    return "test-cli"
-
-
-@pytest.fixture
-def publisher_options(
-    rabbitmq_options: BrokerOptions,
-    parser: ArgumentParser,
-    routing_key: str,
-    exchange_name: str,
-    done: asyncio.Event,
-) -> CLIOptions:
-    options = parser.parse_args(
-        [
-            str(rabbitmq_options.url),
-            routing_key,
-            "--publisher",
-            f"--exchange={exchange_name}",
-        ],
-        namespace=CLIOptions(),
+def publisher_app(
+    *,
+    broker: Broker,
+    publisher_stdin: AsyncStream,
+    publisher_stdout: AsyncStream,
+    publisher_stderr: AsyncStream,
+    stub_publisher_options: PublisherOptions,
+    stub_routing_key: str,
+    raw_encoder: Serializer[BinaryMessage, BinaryMessage],
+) -> PublisherApp:
+    return PublisherApp(
+        broker=broker,
+        options=stub_publisher_options,
+        console=Console(publisher_stdin, publisher_stdout, publisher_stderr),
+        routing_key=stub_routing_key,
+        serializer=raw_encoder,
     )
 
-    options.input = InMemoryStream()
-    options.output = InMemoryStream()
-    options.err = InMemoryStream()
-    options.done = done
-
-    return options
-
 
 @pytest.fixture
-def consumer_options(
-    rabbitmq_options: BrokerOptions,
-    parser: ArgumentParser,
-    routing_key: str,
-    exchange_name: str,
-    done: asyncio.Event,
-) -> CLIOptions:
-    options = parser.parse_args(
-        [
-            str(rabbitmq_options.url),
-            routing_key,
-            "--consumer",
-            f"--exchange={exchange_name}",
-        ],
-        namespace=CLIOptions(),
+def consumer_app(
+    *,
+    broker: Broker,
+    consumer_stdin: AsyncStream,
+    consumer_stdout: AsyncStream,
+    consumer_stderr: AsyncStream,
+    stub_binding_options: BindingOptions,
+    raw_decoder: Serializer[bytes, BinaryMessage],
+) -> ConsumerApp:
+    return ConsumerApp(
+        broker=broker,
+        options=stub_binding_options,
+        serializer=raw_decoder,
+        console=Console(consumer_stdin, consumer_stdout, consumer_stderr),
     )
 
-    options.input = InMemoryStream()
-    options.output = InMemoryStream()
-    options.err = InMemoryStream()
-    options.done = done
 
-    return options
+@pytest.fixture
+def raw_encoder() -> Serializer[BinaryMessage, BinaryMessage]:
+    class RawEncoder(Serializer[BinaryMessage, BinaryMessage]):
+        def dump_message(self, message: BinaryMessage) -> BinaryMessage:
+            return message
+
+        def load_message(self, message: BinaryMessage) -> BinaryMessage:
+            return message
+
+    return RawEncoder()
 
 
 @pytest.fixture
-def done() -> asyncio.Event:
-    return asyncio.Event()
+def raw_decoder() -> Serializer[bytes, BinaryMessage]:
+    class RawDecoder(Serializer[bytes, BinaryMessage]):
+        def dump_message(self, message: bytes) -> BinaryMessage:
+            raise NotImplementedError
+
+        def load_message(self, message: BinaryMessage) -> bytes:
+            return message.body
+
+    return RawDecoder()
+
+
+@pytest.fixture
+def publisher_stdin() -> AsyncStream:
+    return InMemoryStream()
+
+
+@pytest.fixture
+def publisher_stdout() -> AsyncStream:
+    return InMemoryStream()
+
+
+@pytest.fixture
+def publisher_stderr() -> AsyncStream:
+    return InMemoryStream()
+
+
+@pytest.fixture
+def consumer_stdin() -> AsyncStream:
+    return InMemoryStream()
+
+
+@pytest.fixture
+def consumer_stdout() -> AsyncStream:
+    return InMemoryStream()
+
+
+@pytest.fixture
+def consumer_stderr() -> AsyncStream:
+    return InMemoryStream()

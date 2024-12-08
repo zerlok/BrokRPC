@@ -8,10 +8,11 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from aiormq import Channel, Connection, ProtocolSyntaxError, spec
+from aiormq import AMQPError, Channel, ChannelInvalidStateError, Connection, ProtocolSyntaxError, spec
 from pamqp.common import FieldTable
 
-from brokrpc.retry import create_delay_retryer
+from brokrpc.errors import ErrorTransformer
+from brokrpc.retry import RetryerError, create_delay_retryer
 from brokrpc.stringify import to_str_obj
 
 if t.TYPE_CHECKING:
@@ -20,6 +21,8 @@ if t.TYPE_CHECKING:
 from brokrpc.abc import BinaryConsumer, BinaryPublisher, BoundConsumer, BrokerDriver, Publisher
 from brokrpc.message import BinaryMessage, Message
 from brokrpc.model import (
+    BrokerConnectionError,
+    BrokerError,
     ConsumerAck,
     ConsumerReject,
     ConsumerResult,
@@ -34,6 +37,20 @@ from brokrpc.options import (
     QOSOptions,
     QueueOptions,
 )
+
+_ERROR_TRANSFORMER = ErrorTransformer()
+
+
+@_ERROR_TRANSFORMER.register
+def _transform_conn_err(
+    err: ConnectionError | ProtocolSyntaxError | ChannelInvalidStateError,
+) -> BrokerConnectionError:
+    return BrokerConnectionError(str(err))
+
+
+@_ERROR_TRANSFORMER.register
+def _transform_generic_err(err: AMQPError) -> BrokerError:
+    return BrokerError(str(err))
 
 
 class AiormqMessage(Message[bytes]):
@@ -125,6 +142,7 @@ class AiormqPublisher(Publisher[BinaryMessage, PublisherResult]):
         self.__message_id_gen = message_id_gen
         self.__now = now
 
+    @_ERROR_TRANSFORMER.wrap
     async def publish(self, message: BinaryMessage) -> PublisherResult:
         await self.__channel.basic_publish(
             body=message.body,
@@ -162,6 +180,7 @@ class AiormqConsumerCallback:
         self.__channel = channel
         self.__inner = inner
 
+    @_ERROR_TRANSFORMER.wrap
     async def __call__(self, aiormq_message: DeliveredMessage) -> None:
         assert isinstance(aiormq_message.delivery_tag, int)
         assert isinstance(aiormq_message.routing_key, str)
@@ -227,13 +246,18 @@ class AiormqBrokerDriver(BrokerDriver):
         )
 
         conn = Connection(options.url)
-        try:
-            await retryer.do(conn.connect)
+        with _ERROR_TRANSFORMER:
+            try:
+                await retryer.do(conn.connect)
 
-            yield cls(conn)
+                yield cls(conn)
 
-        finally:
-            await conn.close()
+            except RetryerError as err:
+                details = "can't connect to broker"
+                raise BrokerConnectionError(details, options) from err
+
+            finally:
+                await conn.close()
 
     def __init__(self, connection: Connection) -> None:
         self.__connection = connection
@@ -243,31 +267,33 @@ class AiormqBrokerDriver(BrokerDriver):
 
     @asynccontextmanager
     async def provide_publisher(self, options: PublisherOptions | None = None) -> t.AsyncIterator[BinaryPublisher]:
-        async with self.__provide_channel(options) as channel:
-            yield AiormqPublisher(channel, options, self.__gen_message_id, self.__get_now)
+        with _ERROR_TRANSFORMER:
+            async with self.__provide_channel(options) as channel:
+                yield AiormqPublisher(channel, options, self.__gen_message_id, self.__get_now)
 
     @asynccontextmanager
     async def bind_consumer(self, consumer: BinaryConsumer, options: BindingOptions) -> t.AsyncIterator[BoundConsumer]:
         channel: Channel
 
-        async with self.__provide_channel(options.queue) as channel:
-            callback = AiormqConsumerCallback(channel, consumer)
+        with _ERROR_TRANSFORMER:
+            async with self.__provide_channel(options.queue) as channel:
+                callback = AiormqConsumerCallback(channel, consumer)
 
-            bindings = await self.__bind(channel, options)
-            assert isinstance(bindings.queue, QueueOptions)
-            assert isinstance(bindings.queue.name, str)
+                bindings = await self.__bind(channel, options)
+                assert isinstance(bindings.queue, QueueOptions)
+                assert isinstance(bindings.queue.name, str)
 
-            consume_ok = await channel.basic_consume(
-                queue=bindings.queue.name,
-                consumer_callback=callback,
-            )
-            assert isinstance(consume_ok.consumer_tag, str)
+                consume_ok = await channel.basic_consume(
+                    queue=bindings.queue.name,
+                    consumer_callback=callback,
+                )
+                assert isinstance(consume_ok.consumer_tag, str)
 
-            try:
-                yield AiormqBoundConsumer(channel, callback, bindings, consume_ok.consumer_tag)
+                try:
+                    yield AiormqBoundConsumer(channel, callback, bindings, consume_ok.consumer_tag)
 
-            finally:
-                await channel.basic_cancel(consume_ok.consumer_tag)
+                finally:
+                    await channel.basic_cancel(consume_ok.consumer_tag)
 
     @asynccontextmanager
     async def __provide_channel(self, options: QOSOptions | None) -> t.AsyncIterator[Channel]:

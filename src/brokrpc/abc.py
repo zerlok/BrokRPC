@@ -30,6 +30,7 @@ class ConsumerMiddleware[S, U, V](metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
+# TODO: consider interface (e.g. make is_alive async)
 class BoundConsumer(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def is_alive(self) -> bool:

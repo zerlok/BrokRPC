@@ -1,12 +1,10 @@
-import json
-
 import pytest
 from google.protobuf.empty_pb2 import Empty
 from google.protobuf.message import Message as ProtobufMessage
 
 from brokrpc.message import AppMessage, Message
 from brokrpc.model import SerializerLoadError
-from brokrpc.serializer.protobuf import JSONProtobufSerializer, ProtobufSerializer
+from brokrpc.serializer.protobuf import ProtobufSerializer
 from tests.stub.proto.greeting_pb2 import GreetingRequest
 
 
@@ -23,10 +21,6 @@ from tests.stub.proto.greeting_pb2 import GreetingRequest
         pytest.param(
             ProtobufSerializer(GreetingRequest),
             GreetingRequest(name="Jack"),
-        ),
-        pytest.param(
-            JSONProtobufSerializer(GreetingRequest),
-            json.dumps({"name": "Jack"}).encode(),
         ),
     ],
 )

@@ -1,6 +1,5 @@
 import asyncio
 import typing as t
-from dataclasses import asdict
 
 import pytest
 from _pytest.fixtures import SubRequest
@@ -8,7 +7,7 @@ from _pytest.fixtures import SubRequest
 from brokrpc.abc import BinaryPublisher, Publisher, Serializer
 from brokrpc.broker import Broker
 from brokrpc.message import AppMessage, Message
-from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
+from brokrpc.options import BindingOptions, PublisherOptions
 from brokrpc.rpc.abc import Caller, RPCSerializer
 from brokrpc.rpc.client import Client
 from brokrpc.rpc.server import Server
@@ -77,39 +76,38 @@ def receive_waiter_handler(
 
 @pytest.fixture
 async def consumer(
-    rabbitmq_broker: Broker,
+    broker: Broker,
     receive_waiter_consumer: ReceiveWaiterConsumer,
     json_serializer: Serializer[Message[object], Message[bytes]],
-    binding_options: BindingOptions,
+    stub_binding_options: BindingOptions,
 ) -> t.AsyncIterator[ReceiveWaiterConsumer]:
-    async with rabbitmq_broker.consumer(receive_waiter_consumer, binding_options, serializer=json_serializer):
+    async with broker.consumer(receive_waiter_consumer, stub_binding_options, serializer=json_serializer):
         yield receive_waiter_consumer
 
 
 @pytest.fixture
 async def publisher(
-    rabbitmq_broker: Broker,
+    broker: Broker,
     json_serializer: Serializer[Message[object], Message[bytes]],
-    publisher_options: PublisherOptions,
+    stub_publisher_options: PublisherOptions,
 ) -> t.AsyncIterator[BinaryPublisher]:
-    async with rabbitmq_broker.publisher(publisher_options, serializer=json_serializer) as pub:
+    async with broker.publisher(stub_publisher_options, serializer=json_serializer) as pub:
         yield pub
 
 
 @pytest.fixture
 def greeting_handler(
-    routing_key: str,
-    binding_options: BindingOptions,
+    stub_binding_options: BindingOptions,
     rpc_server: Server,
     rpc_greeting_serializer: RPCSerializer[GreetingRequest, GreetingResponse],
     receive_waiter_handler: GreetingHandler,
 ) -> GreetingHandler:
     rpc_server.register_unary_unary_handler(
         func=receive_waiter_handler,
-        routing_key=routing_key,
+        routing_key=stub_binding_options.binding_keys[0],
         serializer=rpc_greeting_serializer,
-        exchange=binding_options.exchange,
-        queue=binding_options.queue,
+        exchange=stub_binding_options.exchange,
+        queue=stub_binding_options.queue,
     )
 
     return receive_waiter_handler
@@ -117,48 +115,22 @@ def greeting_handler(
 
 @pytest.fixture
 async def caller(
-    exchange: ExchangeOptions,
-    routing_key: str,
+    stub_publisher_options: PublisherOptions,
+    stub_routing_key: str,
     rpc_client: Client,
     rpc_greeting_serializer: RPCSerializer[GreetingRequest, GreetingResponse],
 ) -> t.AsyncIterator[Caller[GreetingRequest, GreetingResponse]]:
     async with rpc_client.unary_unary_caller(
-        routing_key=routing_key,
+        routing_key=stub_routing_key,
         serializer=rpc_greeting_serializer,
-        exchange=exchange,
+        exchange=stub_publisher_options,
     ) as caller:
         yield caller
 
 
 @pytest.fixture
-def exchange() -> ExchangeOptions:
-    return ExchangeOptions(name="simple-test", auto_delete=True)
-
-
-@pytest.fixture
-def publisher_options(exchange: ExchangeOptions) -> PublisherOptions:
-    return PublisherOptions(**asdict(exchange))
-
-
-@pytest.fixture
-def binding_options(publisher_options: PublisherOptions, routing_key: str) -> BindingOptions:
-    return BindingOptions(
-        exchange=publisher_options,
-        binding_keys=(routing_key,),
-        queue=QueueOptions(
-            auto_delete=True,
-        ),
-    )
-
-
-@pytest.fixture
-def routing_key() -> str:
-    return "test-simple"
-
-
-@pytest.fixture
-def json_message(json_content: object, routing_key: str) -> Message[object]:
-    return AppMessage(body=json_content, routing_key=routing_key)
+def json_message(json_content: object, stub_routing_key: str) -> Message[object]:
+    return AppMessage(body=json_content, routing_key=stub_routing_key)
 
 
 @pytest.fixture(

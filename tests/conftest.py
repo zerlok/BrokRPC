@@ -1,5 +1,6 @@
 import typing as t
 from contextlib import nullcontext
+from dataclasses import asdict
 from datetime import timedelta
 from unittest.mock import create_autospec
 
@@ -15,7 +16,7 @@ from brokrpc.abc import Consumer, Serializer
 from brokrpc.broker import Broker
 from brokrpc.message import BinaryMessage
 from brokrpc.model import ConsumerResult
-from brokrpc.options import BindingOptions, BrokerOptions
+from brokrpc.options import BindingOptions, BrokerOptions, ExchangeOptions, PublisherOptions, QueueOptions
 from brokrpc.retry import ConstantDelay, DelayRetryStrategy, ExponentialDelay, MultiplierDelay
 from brokrpc.rpc.abc import RPCSerializer, UnaryUnaryHandler
 from tests.stub.driver import StubBrokerDriver, StubConsumer
@@ -35,15 +36,20 @@ def pytest_addoption(parser: Parser) -> None:
         return timedelta(seconds=float(value))
 
     parser.addoption(
-        "--broker-url",
+        "--broker-drivers",
+        type=str,
+        action="append",
+        default=None,
+    )
+    parser.addoption(
+        "--aiormq-url",
         type=URL,
         default=URL("amqp://guest:guest@localhost:5672/"),
     )
     parser.addoption(
-        "--broker-driver",
-        type=str,
-        choices=["aiormq"],
-        default="aiormq",
+        "--redis-url",
+        type=URL,
+        default=URL("redis://localhost:6379/"),
     )
     parser.addoption(
         "--broker-retry-delay",
@@ -73,16 +79,6 @@ def pytest_addoption(parser: Parser) -> None:
     )
 
 
-def parse_broker_options(config: Config) -> BrokerOptions:
-    return BrokerOptions(
-        url=config.getoption("broker_url"),
-        driver=config.getoption("broker_driver"),
-        retry_delay=parse_retry_delay_strategy(config),
-        retries_timeout=config.getoption("broker_retries_timeout"),
-        retries_limit=config.getoption("broker_retries_limit"),
-    )
-
-
 def parse_retry_delay_strategy(config: Config) -> DelayRetryStrategy | None:
     match mode := config.getoption("broker_retry_delay_mode"):
         case "constant":
@@ -108,6 +104,28 @@ def parse_retry_delay_strategy(config: Config) -> DelayRetryStrategy | None:
         case _:
             details = "unknown mode"
             raise ValueError(details, mode)
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("aiormq"),
+        pytest.param("redis"),
+    ],
+)
+def broker_options(request: SubRequest) -> BrokerOptions:
+    driver = request.param
+    drivers = request.config.getoption("broker_drivers", None)
+
+    if drivers is not None and driver not in drivers:
+        pytest.skip(reason=f"driver is not enabled: {driver}")
+
+    return BrokerOptions(
+        url=request.config.getoption(f"{driver}_url"),
+        driver=driver,
+        retry_delay=parse_retry_delay_strategy(request.config),
+        retries_timeout=request.config.getoption("broker_retries_timeout"),
+        retries_limit=request.config.getoption("broker_retries_limit"),
+    )
 
 
 @pytest.fixture
@@ -151,13 +169,52 @@ def mock_unary_unary_handler() -> UnaryUnaryHandler[object, object]:
 
 
 @pytest.fixture
-def stub_routing_key(request: SubRequest) -> str:
-    return request.node.name
+def stub_exchange_name(request: SubRequest) -> str:
+    return f"{request.node.originalname}-exchange"
 
 
 @pytest.fixture
-def stub_binding_options(stub_routing_key: str) -> BindingOptions:
-    return BindingOptions(binding_keys=(stub_routing_key,))
+def stub_routing_key(request: SubRequest) -> str:
+    return f"{request.node.originalname}-rk"
+
+
+@pytest.fixture
+def stub_queue_name(request: SubRequest) -> str:
+    return f"{request.node.originalname}-queue"
+
+
+@pytest.fixture
+def stub_exchange(stub_exchange_name: str) -> ExchangeOptions:
+    return ExchangeOptions(
+        name=stub_exchange_name,
+        auto_delete=True,
+    )
+
+
+@pytest.fixture
+def stub_queue(stub_queue_name: str) -> QueueOptions:
+    return QueueOptions(
+        name=stub_queue_name,
+        auto_delete=True,
+    )
+
+
+@pytest.fixture
+def stub_publisher_options(stub_exchange: ExchangeOptions) -> PublisherOptions:
+    return PublisherOptions(**asdict(stub_exchange))
+
+
+@pytest.fixture
+def stub_binding_options(
+    stub_exchange: ExchangeOptions,
+    stub_routing_key: str,
+    stub_queue: QueueOptions,
+) -> BindingOptions:
+    return BindingOptions(
+        exchange=stub_exchange,
+        binding_keys=(stub_routing_key,),
+        queue=stub_queue,
+    )
 
 
 @pytest.fixture
