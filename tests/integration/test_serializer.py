@@ -8,10 +8,10 @@ from tests.stub.pydantic import FooModel
 
 
 @pytest.mark.parametrize("obj", [FooModel(num=42, s="spam", bar=FooModel.Bar(str2int={"eggs": 59}))])
-def test_pydantic_dump_json_load_ok(
-    pydantic_serializer: PydanticSerializer,
+def test_pydantic_dump_json_load_ok[T: BaseModel](
+    pydantic_serializer: PydanticSerializer[T],
     json_serializer: JSONSerializer,
-    message: Message[object],
+    message: Message[T],
     obj: BaseModel,
 ) -> None:
     loaded = json_serializer.load_message(pydantic_serializer.dump_message(message))
@@ -20,10 +20,10 @@ def test_pydantic_dump_json_load_ok(
 
 
 @pytest.fixture
-def pydantic_serializer(obj: BaseModel) -> PydanticSerializer:
+def pydantic_serializer[T: BaseModel](obj: T) -> PydanticSerializer[T]:
     return PydanticSerializer(type(obj))
 
 
 @pytest.fixture
-def message(obj: object, stub_routing_key: str) -> Message[object]:
+def message[T: BaseModel](obj: T, stub_routing_key: str) -> Message[T]:
     return AppMessage(body=obj, routing_key=stub_routing_key)
