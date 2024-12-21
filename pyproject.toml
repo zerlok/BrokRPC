@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "BrokRPC"
-version = "0.2.3"
+version = "0.2.4"
 description = "framework for gRPC like server-client communication over message brokers"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 readme = "README.md"
@@ -33,11 +33,13 @@ protobuf = {version = "^5.26.1", optional = true}
 googleapis-common-protos = {version = "^1.65.0", optional = true}
 aiormq = {version = "^6.8.1", optional = true}
 aiofiles = {version = "^24.1.0", optional = true}
+pydantic = {version = "^2.10.4", optional = true}
 
 [tool.poetry.extras]
 cli = ["aiofiles"]
 protobuf = ["protobuf", "googleapis-common-protos"]
 aiormq = ["aiormq"]
+pydantic = ["pydantic"]
 
 [tool.poetry.scripts]
 brokrpc = "brokrpc.cli:main"
