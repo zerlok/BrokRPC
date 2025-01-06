@@ -96,8 +96,9 @@ class Broker(t.AsyncContextManager["Broker"]):
             return
 
         async with self.__lock:
+            # NOTE: double check, because other coroutine may have entered the lock and set up the driver.
             if self.__driver is not None:
-                return
+                return  # type: ignore[unreachable]
 
             assert not self.is_connected
             self.__driver = await self.__stack.enter_async_context(self.__connect())
@@ -109,8 +110,9 @@ class Broker(t.AsyncContextManager["Broker"]):
             return
 
         async with self.__lock:
+            # NOTE: double check, because other coroutine may have entered the lock and tear down the driver.
             if self.__driver is None:
-                return
+                return  # type: ignore[unreachable]
 
             assert self.is_connected
             try:

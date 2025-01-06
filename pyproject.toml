@@ -91,16 +91,60 @@ ignore = [
 
 [tool.mypy]
 files = ["src", "tests", "examples/simple.py", "examples/simple_rpc.py"]
-strict = true
 
+strict = true
+disallow_any_unimported = true
+# TODO: disallow any expr
+#disallow_any_expr = true
+disallow_any_decorated = true
+# TODO: disallow explicit any usage
+#disallow_any_explicit = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_return_any = true
+warn_unreachable = true
+strict_equality = true
+strict_optional = true
+enable_error_code = [
+    "redundant-self",
+    "redundant-expr",
+    "possibly-undefined",
+    "truthy-bool",
+    "truthy-iterable",
+    "ignore-without-code",
+    "unused-awaitable",
+    # TODO: enable explicit override
+    #  "explicit-override",
+    "mutable-override",
+    "narrowed-type-not-subtype",
+]
+
+# NOTE: google.rpc doesn't have appropriate types
 [[tool.mypy.overrides]]
 module = ["google.rpc.*"]
 ignore_missing_imports = true
+
+# NOTE: google.rpc doesn't have appropriate types, but these types are used by call_pb2
+[[tool.mypy.overrides]]
+module= ["brokrpc.spec.v1.call_pb2"]
+disallow_any_unimported = false
 
 # NOTE: allow return `typing.Any` in test fixtures (e.g. mock objects created with `create_autospec`)
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 warn_return_any = false
+
+# NOTE: pydantic.BaseModel has fields with Any
+[[tool.mypy.overrides]]
+module= ["tests.stub.pydantic"]
+disallow_any_decorated = false
 
 
 [tool.pytest.ini_options]
