@@ -232,7 +232,7 @@ def parse_serializer(  # type: ignore[misc]
     value: str | None,
 ) -> Serializer[t.Any, BinaryMessage]:
     if value is None:
-        return IdentSerializer()
+        return IdentSerializer[BinaryMessage]()
 
     match value.split(":", maxsplit=1):
         case ["raw"]:

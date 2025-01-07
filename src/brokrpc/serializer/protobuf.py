@@ -34,7 +34,7 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[byte
             body=body,
             content_type=self.__CONTENT_TYPE,
             content_encoding=None,
-            message_type=message.body.DESCRIPTOR.full_name,
+            message_type=_get_full_name(message.body),
         )
 
     def load_message(self, message: BinaryMessage) -> UnpackedMessage[T]:
@@ -42,7 +42,7 @@ class ProtobufSerializer[T: ProtobufMessage](Serializer[Message[T], Message[byte
             details = f"invalid content type: {message.content_type}"
             raise SerializerLoadError(details, message)
 
-        if message.message_type != self.__message_type.DESCRIPTOR.full_name:
+        if message.message_type != _get_full_name(self.__message_type):
             details = f"invalid message type: {message.message_type}"
             raise SerializerLoadError(details, message)
 
@@ -78,7 +78,7 @@ class DictProtobufSerializer[T: ProtobufMessage](Serializer[Message[dict[str, ob
         protobuf_message = self.__proto.load_message(message)
 
         try:
-            dict_payload = MessageToDict(protobuf_message.body, preserving_proto_field_name=True)
+            dict_payload: dict[str, object] = MessageToDict(protobuf_message.body, preserving_proto_field_name=True)
 
         except Error as err:
             details = "can't covert protobuf message to dict"
@@ -171,3 +171,8 @@ def pack_any(msg: ProtobufMessage) -> Any:
 def unpack_any[T: ProtobufMessage](msg_type: type[T], value: Any) -> tuple[bool, T]:
     msg = msg_type()
     return value.Unpack(msg), msg
+
+
+def _get_full_name(message: ProtobufMessage | type[ProtobufMessage]) -> str:
+    # NOTE: google protobuf message descriptor fields are typed with Any
+    return message.DESCRIPTOR.full_name  # type: ignore[misc,no-any-return]

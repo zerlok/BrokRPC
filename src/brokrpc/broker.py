@@ -218,6 +218,7 @@ class Broker(t.AsyncContextManager["Broker"]):
             self.build_consumer()
             .add_serializer(serializer)
             .build(
+                # NOTE: see Broker.consume method todo
                 inner=t.cast(t.Any, consumer),  # type: ignore[misc]
                 options=options,
                 executor=executor,

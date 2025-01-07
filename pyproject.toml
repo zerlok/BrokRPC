@@ -94,10 +94,8 @@ files = ["src", "tests", "examples/simple.py", "examples/simple_rpc.py"]
 
 strict = true
 disallow_any_unimported = true
-# TODO: disallow any expr
-#disallow_any_expr = true
+disallow_any_expr = true
 disallow_any_decorated = true
-# TODO: disallow explicit any usage
 disallow_any_explicit = true
 disallow_any_generics = true
 disallow_subclassing_any = true
@@ -123,6 +121,7 @@ enable_error_code = [
     # TODO: enable explicit override
     #  "explicit-override",
     "mutable-override",
+    "unimported-reveal",
     "narrowed-type-not-subtype",
 ]
 
@@ -136,9 +135,23 @@ ignore_missing_imports = true
 module= ["brokrpc.spec.v1.call_pb2"]
 disallow_any_unimported = false
 
+# NOTE: in the following modules it is hard to avoid expressions with Any
+[[tool.mypy.overrides]]
+module= [
+    "brokrpc.builder",
+    "brokrpc.cli",
+    "brokrpc.debug",
+    "brokrpc.driver.aiormq",
+    "brokrpc.options",
+    "brokrpc.plugin",
+    "brokrpc.rpc.server",
+]
+disallow_any_expr = false
+
 # NOTE: allow return `typing.Any` in test fixtures (e.g. mock objects created with `create_autospec`)
 [[tool.mypy.overrides]]
 module = ["tests.*"]
+disallow_any_expr = false
 disallow_any_explicit = false
 warn_return_any = false
 

@@ -77,7 +77,7 @@ class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[
             raise SerializerLoadError(details, message) from err
 
         try:
-            obj = self.__decoder.decode(json_str)
+            obj: object = self.__decoder.decode(json_str)
 
         except JSONDecodeError as err:
             details = f"can't decode json message: {err}"

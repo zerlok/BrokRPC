@@ -94,6 +94,10 @@ class ConsumerOptions(QueueOptions, DecoratorOptions):
 
 @dataclass(frozen=True, kw_only=True)
 class PublisherOptions(ExchangeOptions):
+    @classmethod
+    def from_exchange(cls, options: ExchangeOptions) -> PublisherOptions:
+        return cls(**asdict(options))
+
     mandatory: bool | None = None
 
 
