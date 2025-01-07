@@ -12,6 +12,7 @@ message brokers.
 
 ## key features
 
+* strict typing (even `disallow_any_expr=true`)
 * same protobuf structures as in gRPC
 * similar calls as in gRPC
   * unary-unary

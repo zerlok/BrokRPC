@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "BrokRPC"
-version = "0.2.4"
+version = "0.2.5"
 description = "framework for gRPC like server-client communication over message brokers"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 readme = "README.md"
@@ -50,7 +50,7 @@ mypy = "^1.13.0"
 pytest = "^8.3.3"
 pytest-cov = ">=5,<7"
 ruff = "^0.8.0"
-pytest-asyncio = "^0.24.0"
+pytest-asyncio = ">=0.24,<0.26"
 pytest-timeout = "^2.3.1"
 pytest-mypy-plugins = "^3.1.2"
 types-aiofiles = "^24.1.0.20240626"
@@ -91,16 +91,74 @@ ignore = [
 
 [tool.mypy]
 files = ["src", "tests", "examples/simple.py", "examples/simple_rpc.py"]
-strict = true
 
+strict = true
+disallow_any_unimported = true
+disallow_any_expr = true
+disallow_any_decorated = true
+disallow_any_explicit = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_return_any = true
+warn_unreachable = true
+strict_equality = true
+strict_optional = true
+enable_error_code = [
+    "redundant-self",
+    "redundant-expr",
+    "possibly-undefined",
+    "truthy-bool",
+    "truthy-iterable",
+    "ignore-without-code",
+    "unused-awaitable",
+    # TODO: enable explicit override
+    #  "explicit-override",
+    "mutable-override",
+    "unimported-reveal",
+    "narrowed-type-not-subtype",
+]
+
+# NOTE: google.rpc doesn't have appropriate types
 [[tool.mypy.overrides]]
 module = ["google.rpc.*"]
 ignore_missing_imports = true
 
+# NOTE: google.rpc doesn't have appropriate types, but these types are used by call_pb2
+[[tool.mypy.overrides]]
+module= ["brokrpc.spec.v1.call_pb2"]
+disallow_any_unimported = false
+
+# NOTE: in the following modules it is hard to avoid expressions with Any
+[[tool.mypy.overrides]]
+module= [
+    "brokrpc.builder",
+    "brokrpc.cli",
+    "brokrpc.debug",
+    "brokrpc.driver.aiormq",
+    "brokrpc.options",
+    "brokrpc.plugin",
+    "brokrpc.rpc.server",
+]
+disallow_any_expr = false
+
 # NOTE: allow return `typing.Any` in test fixtures (e.g. mock objects created with `create_autospec`)
 [[tool.mypy.overrides]]
 module = ["tests.*"]
+disallow_any_expr = false
+disallow_any_explicit = false
 warn_return_any = false
+
+# NOTE: pydantic.BaseModel has fields with Any
+[[tool.mypy.overrides]]
+module= ["tests.stub.pydantic"]
+disallow_any_decorated = false
 
 
 [tool.pytest.ini_options]

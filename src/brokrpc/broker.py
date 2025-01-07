@@ -96,8 +96,9 @@ class Broker(t.AsyncContextManager["Broker"]):
             return
 
         async with self.__lock:
+            # NOTE: double check, because other coroutine may have entered the lock and set up the driver.
             if self.__driver is not None:
-                return
+                return  # type: ignore[unreachable]
 
             assert not self.is_connected
             self.__driver = await self.__stack.enter_async_context(self.__connect())
@@ -109,8 +110,9 @@ class Broker(t.AsyncContextManager["Broker"]):
             return
 
         async with self.__lock:
+            # NOTE: double check, because other coroutine may have entered the lock and tear down the driver.
             if self.__driver is None:
-                return
+                return  # type: ignore[unreachable]
 
             assert self.is_connected
             try:
@@ -198,6 +200,8 @@ class Broker(t.AsyncContextManager["Broker"]):
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
+    # TODO: find a way to write a type safe implementation that invokes `ConsumerBuilder` methods without duplicating
+    #  the code of builder.
     def consumer[T](
         self,
         consumer: BinaryConsumer
@@ -213,8 +217,12 @@ class Broker(t.AsyncContextManager["Broker"]):
         return (
             self.build_consumer()
             .add_serializer(serializer)
-            # TODO: remove cast to any
-            .build(t.cast(t.Any, consumer), options, executor=executor)
+            .build(
+                # NOTE: see Broker.consume method todo
+                inner=t.cast(t.Any, consumer),  # type: ignore[misc]
+                options=options,
+                executor=executor,
+            )
         )
 
     def build_publisher(self) -> PublisherBuilder[BinaryMessage, PublisherResult]:

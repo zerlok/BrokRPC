@@ -262,6 +262,7 @@ class Retryer:
         self.__strategy = strategy
 
     async def do[**U, V](self, func: t.Callable[U, t.Awaitable[V]], /, *args: U.args, **kwargs: U.kwargs) -> V:
+        strategy: RetryStrategy | None = None
         errors: list[Exception] = []
         attempt: Attempt[V] = Attempt(0, errors)
 
@@ -274,7 +275,7 @@ class Retryer:
                         ) is not None:
                             raise attempt_limit_err
 
-                        details = "attempt limit was reached"
+                        details = "attempts limit was reached"
                         raise NoMoreAttemptsError(details, errors)
 
                     await strategy.try_attempt(attempt, func, args, kwargs)
@@ -288,10 +289,13 @@ class Retryer:
                     attempt = Attempt(attempt.num + 1, errors)
 
         except TimeoutError as err:
+            if strategy is None:
+                raise
+
             if (timeout_err := strategy.on_timeout_reached(func, args, kwargs, errors)) is not None:
                 raise timeout_err from err
 
-            details = "timeout was reached"
+            details = "attempts timeout was reached"
             raise AttemptsTimeoutError(details, errors) from err
 
         return attempt.result()

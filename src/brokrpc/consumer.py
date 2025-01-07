@@ -11,18 +11,18 @@ from brokrpc.stringify import to_str_obj
 
 
 class DecodingConsumer[A, V, B](Consumer[A, V]):
-    def __init__(self, inner: Consumer[B, V], decoder: t.Callable[[A], B]) -> None:
+    def __init__(self, inner: Consumer[B, V], decode: t.Callable[[A], B]) -> None:
         self.__inner = inner
-        self.__decoder = decoder
+        self.__decode = decode
 
     def __str__(self) -> str:
         return to_str_obj(self, inner=self.__inner)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(inner={self.__inner!r}, decoder={self.__decoder!r})"
+        return f"{self.__class__.__name__}(inner={self.__inner!r}, decode={self.__decode!r})"
 
     async def consume(self, message: A) -> V:
-        decoded_message = self.__decoder(message)
+        decoded_message = self.__decode(message)
         result = await self.__inner.consume(decoded_message)
 
         # NOTE: `result` var is for debugger.

@@ -19,7 +19,7 @@ class Loader[T]:
             details = "invalid factory type"
             raise TypeError(details, factory)
 
-        obj = factory()
+        obj: object = factory()
         if not self.__check_instance(obj):
             details = "invalid instance type"
             raise TypeError(details, obj)
@@ -41,10 +41,10 @@ class Loader[T]:
         type_args = t.get_args(getattr(self, "__orig_class__", None))
         assert len(type_args) == 1
 
-        type_ = t.get_origin(type_args[0]) or type_args[0]
-        assert isinstance(type_, type)
+        type_t = t.get_origin(type_args[0]) or type_args[0]
+        assert isinstance(type_t, type)
 
-        return type_
+        return type_t
 
     def __load(self, entrypoint: str) -> object:
         match entrypoint.split(":", maxsplit=1):
@@ -57,7 +57,7 @@ class Loader[T]:
                     raise ValueError(details, entrypoint) from err
 
                 try:
-                    obj = getattr(loaded_module, attr)
+                    obj: object = getattr(loaded_module, attr)
 
                 except AttributeError as err:
                     details = "invalid entrypoint attribute"

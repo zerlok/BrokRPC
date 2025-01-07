@@ -1,7 +1,6 @@
 import typing as t
 import uuid
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 from datetime import timedelta
 
 from brokrpc.abc import Publisher, Serializer
@@ -38,7 +37,7 @@ class Client:
             self.__broker.build_publisher()
             .add_serializer(serializer)
             .add_serializer(build_message)
-            .build(PublisherOptions(**asdict(exchange)) if exchange is not None else None)
+            .build(PublisherOptions.from_exchange(exchange) if exchange is not None else None)
         )
 
     @asynccontextmanager

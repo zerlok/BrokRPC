@@ -109,9 +109,7 @@ class Server:
                 )
 
             case _:
-                # TODO: make `t.assert_never` work
-                details = "invalid func type"
-                raise TypeError(details, func)
+                t.assert_never(func)
 
         self.__consumer_cms.append(cm)
 
@@ -145,9 +143,7 @@ class Server:
                 )
 
             case _:
-                # TODO: make `t.assert_never` work
-                details = "invalid func type"
-                raise TypeError(details, func)
+                t.assert_never(func)
 
         self.__consumer_cms.append(
             partial(
