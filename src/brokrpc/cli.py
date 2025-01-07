@@ -90,7 +90,7 @@ async def run(options: CLIOptions) -> int:
 
 async def run_consumer(broker: Broker, options: CLIOptions) -> int:
     async with broker.consumer(
-        partial(consume_message, options.output)
+        partial(consume_message_wide, options.output)
         if options.output_mode == "wide"
         else partial(consume_message_body, options.output),
         BindingOptions(
@@ -141,7 +141,7 @@ async def run_publisher(broker: Broker, options: CLIOptions) -> int:
         return 0
 
 
-async def consume_message(out: AsyncStream, message: Message[object]) -> None:
+async def consume_message_wide(out: AsyncStream, message: Message[object]) -> None:
     await out.write(f"{message!r}\n".encode())
     await out.flush()
 
@@ -227,7 +227,10 @@ def parse_exchange_name(value: str) -> ExchangeOptions:
     return ExchangeOptions(name=value)
 
 
-def parse_serializer(value: str | None) -> Serializer[t.Any, BinaryMessage]:
+# NOTE: allow any type to be loaded by serializer (used by consumer).
+def parse_serializer(  # type: ignore[misc]
+    value: str | None,
+) -> Serializer[t.Any, BinaryMessage]:
     if value is None:
         return IdentSerializer()
 

@@ -200,6 +200,8 @@ class Broker(t.AsyncContextManager["Broker"]):
         executor: Executor | None = None,
     ) -> t.AsyncContextManager[BoundConsumer]: ...
 
+    # TODO: find a way to write a type safe implementation that invokes `ConsumerBuilder` methods without duplicating
+    #  the code of builder.
     def consumer[T](
         self,
         consumer: BinaryConsumer
@@ -215,8 +217,11 @@ class Broker(t.AsyncContextManager["Broker"]):
         return (
             self.build_consumer()
             .add_serializer(serializer)
-            # TODO: remove cast to any
-            .build(t.cast(t.Any, consumer), options, executor=executor)
+            .build(
+                inner=t.cast(t.Any, consumer),  # type: ignore[misc]
+                options=options,
+                executor=executor,
+            )
         )
 
     def build_publisher(self) -> PublisherBuilder[BinaryMessage, PublisherResult]:

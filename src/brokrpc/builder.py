@@ -210,11 +210,14 @@ class ConsumerBuilder[U, V]:
                 consumer = AsyncFuncConsumer(async_func)
 
             case sync_func if callable(sync_func):
-                consumer = SyncFuncConsumer(t.cast(t.Callable[[U], V], sync_func), executor)
+                consumer = SyncFuncConsumer(
+                    # TODO: avoid cast
+                    t.cast(t.Callable[[U], V], sync_func),
+                    executor,
+                )
 
             case _:
-                # FIXME: make `t.assert_never(inner)` work
-                raise TypeError(inner)
+                t.assert_never(inner)
 
         return self.__binder(self.__wrapper(consumer), self.__clear_binding_options(options))
 
