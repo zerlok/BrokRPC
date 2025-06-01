@@ -9,6 +9,36 @@ on:
       - main
 
 jobs:
+  venv:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.12", "3.13" ]
+    env:
+      OS: ubuntu
+      PYTHON: ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install poetry
+        run: pip install poetry
+      - name: Configure poetry
+        run: |
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project false
+      - name: Cache venv
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: venv-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+      - name: Install project dependencies
+        run: poetry install --without=examples --all-extras
+
   buf:
     runs-on: ubuntu-latest
     permissions:
@@ -21,33 +51,34 @@ jobs:
           breaking_against: 'https://github.com/zerlok/BrokRPC.git#branch=main'
           push: false
 
-  static:
+  lint:
+    needs: venv
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.12" ]
+        python-version: [ "3.12", "3.13" ]
     steps:
       - uses: actions/checkout@v4
       - name: Install Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-        # see details (matrix, python-version, python-version-file, etc.)
-        # https://github.com/actions/setup-python
       - name: Install poetry
-        uses: abatilo/actions-poetry@v2
-      - name: Setup a local virtual environment (if no poetry.toml file)
+        run: pip install poetry
+      - name: Configure poetry
         run: |
-          poetry config virtualenvs.create true --local
-          poetry config virtualenvs.in-project true --local
-      - uses: actions/cache@v3
-        name: Define a cache for the virtual environment based on the dependencies lock file
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project false
+      - name: Cache venv
+        id: cache
+        uses: actions/cache@v4
         with:
-          path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-      - name: Install the project dependencies
-        run: poetry install --all-extras
+          path: ~/.cache/pypoetry
+          key: venv-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          fail-on-cache-miss: 'true'
+      - name: Show poetry env info
+        run: poetry env info
       - name: Run mypy
         run: poetry run mypy
       - name: Run ruff check
@@ -56,6 +87,7 @@ jobs:
         run: poetry run ruff format --check
 
   test:
+    needs: lint
     runs-on: ubuntu-latest
     services:
       rabbitmq:
@@ -65,31 +97,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.12" ]
+        python-version: [ "3.12", "3.13" ]
+    env:
+      OS: ubuntu
+      PYTHON: ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-        # see details (matrix, python-version, python-version-file, etc.)
-        # https://github.com/actions/setup-python
       - name: Install poetry
-        uses: abatilo/actions-poetry@v2
-      - name: Setup a local virtual environment (if no poetry.toml file)
+        run: pip install poetry
+      - name: Configure poetry
         run: |
-          poetry config virtualenvs.create true --local
-          poetry config virtualenvs.in-project true --local
-      - uses: actions/cache@v3
-        name: Define a cache for the virtual environment based on the dependencies lock file
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project false
+      - name: Cache venv
+        id: cache
+        uses: actions/cache@v4
         with:
-          path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-      - name: Install the project dependencies
-        run: poetry install --all-extras
+          path: ~/.cache/pypoetry
+          key: venv-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          fail-on-cache-miss: 'true'
+      - name: Show poetry env info
+        run: poetry env info
       - name: Run pytest
         run: poetry run pytest --broker-url=amqp://guest:guest@localhost:5672/ --broker-retry-delay=3 --broker-retry-delay-mode=constant --broker-retries-limit=10 --cov-report=xml
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: OS,PYTHON
