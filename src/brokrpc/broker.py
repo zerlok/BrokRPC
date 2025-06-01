@@ -67,7 +67,7 @@ class Broker(t.AsyncContextManager["Broker"]):
 
     def __del__(self) -> None:
         if self.is_connected:
-            warnings.warn("broker was not disconnected properly", RuntimeWarning, stacklevel=1)
+            warnings.warn("broker was not disconnected properly", RuntimeWarning, stacklevel=2)
 
     def __str__(self) -> str:
         return to_str_obj(self, is_connected=self.is_connected, driver=self.__driver)
@@ -269,6 +269,11 @@ def connect(options: BrokerConnectOptions) -> t.AsyncContextManager[BrokerDriver
         from brokrpc.driver.aiormq import AiormqBrokerDriver
 
         return AiormqBrokerDriver.connect(clean_options)
+
+    elif clean_options.driver == "memory":
+        from brokrpc.driver.memory import InMemoryBrokerDriver
+
+        return InMemoryBrokerDriver.setup(clean_options)
 
     else:
         details = "unsupported driver"

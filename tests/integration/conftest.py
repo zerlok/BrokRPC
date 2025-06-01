@@ -18,7 +18,8 @@ from tests.stub.proto.greeting_pb2 import GreetingRequest, GreetingResponse
 @pytest.fixture(
     params=[
         pytest.param("aiormq"),
-    ]
+        pytest.param("memory"),
+    ],
 )
 def rabbitmq_options(request: SubRequest) -> BrokerOptions:
     return replace(
