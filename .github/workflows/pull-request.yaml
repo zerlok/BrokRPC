@@ -37,7 +37,7 @@ jobs:
           path: ~/.cache/pypoetry
           key: venv-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
       - name: Install project dependencies
-        run: poetry install --without=examples --all-extras
+        run: poetry install --all-extras
 
   buf:
     runs-on: ubuntu-latest
