@@ -60,7 +60,7 @@ class PublisherBuilder[U, V]:
             return t.cast(PublisherBuilder[U2, V], self)
 
         inner_wrapper = self.__wrapper
-        dump_message = serializer.dump_message if isinstance(serializer, Serializer) else serializer
+        dump_message = serializer.encode_message if isinstance(serializer, Serializer) else serializer
 
         def wrapper(inner: BinaryPublisher) -> Publisher[U2, V]:
             return EncodingPublisher(inner_wrapper(inner), dump_message)
@@ -142,7 +142,7 @@ class ConsumerBuilder[U, V]:
             return t.cast(ConsumerBuilder[U2, V], self)
 
         inner_wrapper = self.__wrapper
-        load_message = serializer.load_message if isinstance(serializer, Serializer) else serializer
+        load_message = serializer.decode_message if isinstance(serializer, Serializer) else serializer
 
         def wrapper(inner: Consumer[U2, V]) -> BinaryConsumer:
             return inner_wrapper(DecodingConsumer(inner, load_message))

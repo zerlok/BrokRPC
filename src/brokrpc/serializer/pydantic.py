@@ -3,7 +3,7 @@ from pydantic.main import IncEx
 from pydantic_core import PydanticSerializationError
 
 from brokrpc.abc import Serializer
-from brokrpc.message import BinaryMessage, Message, PackedMessage, UnpackedMessage
+from brokrpc.message import BinaryMessage, DecodedMessage, EncodedMessage, Message
 from brokrpc.model import SerializerDumpError, SerializerLoadError
 
 
@@ -34,7 +34,7 @@ class PydanticSerializer[T: BaseModel](Serializer[Message[T], BinaryMessage]):
         self.__exclude_none = exclude_none
         self.__strict = strict
 
-    def dump_message(self, message: Message[T]) -> BinaryMessage:
+    def encode_message(self, message: Message[T]) -> BinaryMessage:
         assert isinstance(message.body, self.__model)
 
         try:
@@ -53,14 +53,14 @@ class PydanticSerializer[T: BaseModel](Serializer[Message[T], BinaryMessage]):
             details = "can't dump pydantic model"
             raise SerializerDumpError(details, message) from err
 
-        return PackedMessage(
+        return EncodedMessage(
             body=body,
             content_type="application/json",
             content_encoding="utf-8",
             original=message,
         )
 
-    def load_message(self, message: BinaryMessage) -> Message[T]:
+    def decode_message(self, message: BinaryMessage) -> Message[T]:
         try:
             body = self.__model.model_validate_json(message.body, strict=self.__strict)
 
@@ -68,7 +68,7 @@ class PydanticSerializer[T: BaseModel](Serializer[Message[T], BinaryMessage]):
             details = "can't load pydantic model"
             raise SerializerLoadError(details, message) from err
 
-        return UnpackedMessage(
+        return DecodedMessage(
             original=message,
             body=body,
         )

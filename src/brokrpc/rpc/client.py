@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from brokrpc.abc import Publisher, Serializer
 from brokrpc.broker import Broker
-from brokrpc.message import AppMessage, BinaryMessage, Message
+from brokrpc.message import BinaryMessage, Message, create_message
 from brokrpc.model import PublisherResult
 from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions, merge_options
 from brokrpc.rpc.abc import Caller, CallerSerializer
@@ -27,7 +27,7 @@ class Client:
         exchange: ExchangeOptions | None = None,
     ) -> t.AsyncContextManager[Publisher[U, PublisherResult]]:
         def build_message(body: U) -> Message[U]:
-            return AppMessage(
+            return create_message(
                 body=body,
                 routing_key=routing_key,
                 exchange=exchange.name if exchange is not None else None,

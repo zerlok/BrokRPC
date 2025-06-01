@@ -40,13 +40,25 @@ class BoundConsumer(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
-class Serializer[A, B](metaclass=abc.ABCMeta):
+class MessageEncoder[A, B](metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def dump_message(self, message: A) -> B:
+    def encode_message(self, message: A) -> B:
+        raise NotImplementedError
+
+
+class MessageDecoder[A, B](metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def decode_message(self, message: B) -> A:
+        raise NotImplementedError
+
+
+class Serializer[A, B](MessageEncoder[A, B], MessageDecoder[A, B], metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def encode_message(self, message: A) -> B:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def load_message(self, message: B) -> A:
+    def decode_message(self, message: B) -> A:
         raise NotImplementedError
 
 

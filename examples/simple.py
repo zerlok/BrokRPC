@@ -3,7 +3,7 @@ from datetime import timedelta
 from pprint import pprint
 
 from brokrpc.broker import Broker
-from brokrpc.message import AppMessage, Message
+from brokrpc.message import Message, create_message
 from brokrpc.middleware import RetryOnErrorConsumerMiddleware
 from brokrpc.options import BindingOptions, ExchangeOptions, QueueOptions
 from brokrpc.serializer.json import JSONSerializer
@@ -37,7 +37,7 @@ async def main() -> None:
         broker.publisher(serializer=serializer) as pub,
     ):
         # publish app message
-        message_to_publish = AppMessage(body={"content": "hello world"}, routing_key=routing_key)
+        message_to_publish = create_message(body={"content": "hello world"}, routing_key=routing_key)
         await pub.publish(message_to_publish)
 
         # wait for consumed message & do checks

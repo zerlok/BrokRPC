@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "BrokRPC"
-version = "0.2.5"
+version = "0.3.0"
 description = "framework for gRPC like server-client communication over message brokers"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 readme = "README.md"
@@ -76,6 +76,7 @@ ignore = [
     "FA", # TODO: consider should we use __annotations__
     "TD", # no task tracking
     "FIX", # TODO: consider enable it against new code on pull requests
+    "A005", # TODO: wait for ruff 0.10.0
     "COM812", # because ruff format suggests to skip it
     "ISC001", # because ruff format suggests to skip it
     "RET505", # clashes with mypy exhaustiveness check

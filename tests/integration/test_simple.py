@@ -7,7 +7,7 @@ from _pytest.fixtures import SubRequest
 
 from brokrpc.abc import BinaryPublisher, Publisher, Serializer
 from brokrpc.broker import Broker
-from brokrpc.message import AppMessage, Message
+from brokrpc.message import Message, create_message
 from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
 from brokrpc.rpc.abc import Caller, RPCSerializer
 from brokrpc.rpc.client import Client
@@ -158,7 +158,7 @@ def routing_key() -> str:
 
 @pytest.fixture
 def json_message(json_content: object, routing_key: str) -> Message[object]:
-    return AppMessage(body=json_content, routing_key=routing_key)
+    return create_message(body=json_content, routing_key=routing_key)
 
 
 @pytest.fixture(

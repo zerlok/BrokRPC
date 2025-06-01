@@ -1,5 +1,5 @@
 import typing as t
-from argparse import ArgumentError, ArgumentParser
+from argparse import ArgumentParser
 
 import pytest
 from yarl import URL
@@ -106,7 +106,7 @@ class TestParser:
         ],
     )
     def test_parse_error(self, parser: ArgumentParser, args: t.Sequence[str], expected_message: str) -> None:
-        with pytest.raises(ArgumentError, match=expected_message):
+        with pytest.raises(ExitError, match=expected_message):
             parser.parse_args(args)
 
 
@@ -129,7 +129,14 @@ def options(values: t.Mapping[str, object] | None) -> CLIOptions:
 def parser() -> ArgumentParser:
     parser = build_parser()
 
-    # NOTE: raise exceptions instead of `sys.exit`
-    parser.exit_on_error = False  # type: ignore[attr-defined]
+    # NOTE: patch `error` method: raise `ExitError` instead of `sys.exit`
+    def error(message: str) -> t.NoReturn:
+        raise ExitError(message)
+
+    parser.error = error  # type: ignore[method-assign]
 
     return parser
+
+
+class ExitError(Exception):
+    pass

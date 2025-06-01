@@ -2,7 +2,7 @@ import typing as t
 from json import JSONDecodeError, JSONDecoder, JSONEncoder
 
 from brokrpc.abc import Serializer
-from brokrpc.message import BinaryMessage, Message, PackedMessage, UnpackedMessage
+from brokrpc.message import BinaryMessage, DecodedMessage, EncodedMessage, Message
 from brokrpc.model import SerializerDumpError, SerializerLoadError
 from brokrpc.rpc.abc import RPCSerializer
 from brokrpc.rpc.model import BinaryRequest, Request, Response
@@ -30,7 +30,7 @@ class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[
         self.__decoder = decoder if decoder is not None else JSONDecoder()
         self.__encoding = encoding if encoding is not None else "utf-8"
 
-    def dump_message(self, message: Message[object]) -> PackedMessage[bytes]:
+    def encode_message(self, message: Message[object]) -> EncodedMessage[bytes]:
         encoding = message.content_encoding if message.content_encoding is not None else self.__encoding
         try:
             body = self.__encoder.encode(message.body).encode(encoding)
@@ -39,28 +39,28 @@ class JSONSerializer(Serializer[Message[object], Message[bytes]], RPCSerializer[
             details = "can't encode json message"
             raise SerializerDumpError(details, message) from err
 
-        return PackedMessage(
+        return EncodedMessage(
             original=message,
             body=body,
             content_type=self.__CONTENT_TYPE,
             content_encoding=encoding,
         )
 
-    def load_message(self, message: BinaryMessage) -> UnpackedMessage[object]:
+    def decode_message(self, message: BinaryMessage) -> DecodedMessage[object]:
         obj = self.__load(message)
-        return UnpackedMessage(message, obj)
+        return DecodedMessage(message, obj)
 
     def dump_unary_request(self, request: Request[object]) -> BinaryRequest:
-        return self.dump_message(request)
+        return self.encode_message(request)
 
     def load_unary_request(self, request: BinaryRequest) -> Request[object]:
-        return self.load_message(request)
+        return self.decode_message(request)
 
     def dump_unary_response(self, response: Response[object]) -> BinaryMessage:
-        return self.dump_message(response)
+        return self.encode_message(response)
 
     def load_unary_response(self, response: BinaryMessage) -> Response[object]:
-        return self.load_message(response)
+        return self.decode_message(response)
 
     def __load(self, message: BinaryMessage) -> object:
         if message.content_type != self.__CONTENT_TYPE:

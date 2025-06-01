@@ -76,13 +76,13 @@ from brokrpc.serializer.json import JSONSerializer
 async def register_consumer(broker: Broker) -> None:
     # define consumer function (you also can use async function & `Consumer` interface).
     def consume_binary_message(message: Message[bytes]) -> None:
-      print(message)
+        print(message)
   
     # consumer is not attached yet
   
     async with broker.consumer(consume_binary_message, BindingOptions(binding_keys=["my-consumer"])):
-      # in this code block consumer is attached to broker and can receive messages
-      ...
+        # in this code block consumer is attached to broker and can receive messages
+        ...
   
     # outside CM consumer is detached from broker and cannot receive messages
   
@@ -120,17 +120,17 @@ async def register_consumer(broker: Broker) -> None:
 
 ```python
 from brokrpc.broker import Broker
-from brokrpc.message import AppMessage
+from brokrpc.message import create_message
 from brokrpc.serializer.json import JSONSerializer
 
 
 async def publish_messages(broker: Broker) -> None:
     async with broker.publisher() as pub:
         # in this code block publisher is attached to broker and can send messages
-        await pub.publish(AppMessage(body=b"this is a binary message", routing_key="test-consumer"))
-    
+        await pub.publish(create_message(body=b"this is a binary message", routing_key="test-consumer"))
+
     async with broker.publisher(serializer=JSONSerializer()) as json_pub:
-        await json_pub.publish(AppMessage(body={"username": "John Smith"}, routing_key="my-json-consumer"))
+        await json_pub.publish(create_message(body={"username": "John Smith"}, routing_key="my-json-consumer"))
 ```
 
 ### Publisher Middlewares
@@ -140,9 +140,9 @@ async def publish_messages(broker: Broker) -> None:
 ### Message
 
 * `Message`
-* `AppMessage`
-* `PackedMessage`
-* `UnpackedMessage`
+* `SomeMessage`
+* `EncodedMessage`
+* `DecodedMessage`
 
 ### Serializer
 

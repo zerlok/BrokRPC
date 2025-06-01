@@ -11,7 +11,7 @@ if t.TYPE_CHECKING:
     from brokrpc.rpc.storage import WaiterStorage
 
 from brokrpc.abc import Consumer, Publisher
-from brokrpc.message import AppMessage, BinaryMessage, Message
+from brokrpc.message import BinaryMessage, Message, create_message
 from brokrpc.model import ConsumerAck, ConsumerReject, ConsumerResult, PublisherResult
 
 
@@ -105,7 +105,7 @@ def get_response_factory[U, V](
     if (reply_to := request.reply_to) is not None and (correlation_id := request.correlation_id) is not None:
 
         def create(response_payload: V) -> BinaryResponse:
-            reply = AppMessage(
+            reply = create_message(
                 body=response_payload,
                 routing_key=reply_to,
                 exchange=request.exchange,

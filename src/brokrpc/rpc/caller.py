@@ -12,7 +12,7 @@ if t.TYPE_CHECKING:
     from brokrpc.rpc.storage import WaiterStorage
 
 
-from brokrpc.message import AppMessage
+from brokrpc.message import create_message
 from brokrpc.rpc.abc import Caller
 from brokrpc.stringify import to_str_obj
 
@@ -45,7 +45,7 @@ class RequestCaller[U, V](Caller[U, V]):
 
         with self.__storage.context() as (correlation_id, waiter):
             request_message = self.__serializer(
-                AppMessage(
+                create_message(
                     body=request_payload,
                     exchange=self.__exchange.name if self.__exchange is not None else None,
                     routing_key=self.__routing_key,

@@ -12,7 +12,7 @@ from yarl import URL
 
 from brokrpc.abc import Serializer
 from brokrpc.broker import Broker
-from brokrpc.message import AppMessage, BinaryMessage, Message
+from brokrpc.message import BinaryMessage, Message, create_message
 from brokrpc.middleware import AbortBadMessageMiddleware
 from brokrpc.options import BindingOptions, ExchangeOptions, PublisherOptions, QueueOptions
 from brokrpc.plugin import Loader
@@ -121,7 +121,7 @@ async def run_publisher(broker: Broker, options: CLIOptions) -> int:
         serializer=options.serializer,
     ) as publisher:
         async for body in options.input:
-            message = AppMessage(body=body, routing_key=options.routing_key)
+            message = create_message(body=body, routing_key=options.routing_key)
             result = await publisher.publish(message)
 
             match result:

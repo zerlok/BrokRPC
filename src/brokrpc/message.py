@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+__all__ = [
+    "BinaryMessage",
+    "DecodedMessage",
+    "EncodedMessage",
+    "Message",
+    "SomeMessage",
+    "create_message",
+]
+
+
 import abc
 import typing as t
 
@@ -11,6 +21,12 @@ from brokrpc.stringify import to_str_obj
 
 
 class Message[T](metaclass=abc.ABCMeta):
+    """
+    Base abstract class for all message structures.
+
+    It is recommended to use this class in user code as interface for all messages.
+    """
+
     if not is_debug_enabled():
 
         def __str__(self) -> str:
@@ -43,6 +59,12 @@ class Message[T](metaclass=abc.ABCMeta):
             and self.user_id == other.user_id
             and self.app_id == other.app_id
         )
+
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return NotImplemented
+
+        return not (self == other)
 
     @property
     @abc.abstractmethod
@@ -128,7 +150,60 @@ class Message[T](metaclass=abc.ABCMeta):
 type BinaryMessage = Message[bytes]
 
 
-class AppMessage[T](Message[T]):
+# NOTE: message constructor has a lot of options to set up a structure (dataclass)
+def create_message[T](  # noqa: PLR0913
+    *,
+    body: T,
+    routing_key: str,
+    exchange: str | None = None,
+    content_type: str | None = None,
+    content_encoding: str | None = None,
+    headers: t.Mapping[str, str] | None = None,
+    delivery_mode: int | None = None,
+    priority: int | None = None,
+    correlation_id: str | None = None,
+    reply_to: str | None = None,
+    timeout: timedelta | None = None,
+    message_id: str | None = None,
+    timestamp: datetime | None = None,
+    message_type: str | None = None,
+    user_id: str | None = None,
+    app_id: str | None = None,
+) -> Message[T]:
+    """
+    A factory function to create a message.
+
+    Applications should use this function to create messages to send them via brokrpc. The `body` is an application
+    level data. Use publisher encoders for data to be encoded before actual sending.
+    """
+
+    return SomeMessage(
+        body=body,
+        routing_key=routing_key,
+        exchange=exchange,
+        content_type=content_type,
+        content_encoding=content_encoding,
+        headers=headers,
+        delivery_mode=delivery_mode,
+        priority=priority,
+        correlation_id=correlation_id,
+        reply_to=reply_to,
+        timeout=timeout,
+        message_id=message_id,
+        timestamp=timestamp,
+        message_type=message_type,
+        user_id=user_id,
+        app_id=app_id,
+    )
+
+
+class SomeMessage[T](Message[T]):
+    """
+    Base implementation for message with some data (either application level or broker level).
+
+    Applications should not use this class directly. Use `create_message` factory function instead.
+    """
+
     __slots__ = (
         "__app_id",
         "__body",
@@ -274,7 +349,13 @@ class AppMessage[T](Message[T]):
 
 
 @t.final
-class PackedMessage[T](Message[T]):
+class EncodedMessage[T](Message[T]):
+    """
+    A message that has an encoded body.
+
+    Applications should not use this class directly. Use publishers with encoders to encode messages before sending.
+    """
+
     __slots__ = (
         "__body",
         "__content_encoding",
@@ -380,7 +461,14 @@ class PackedMessage[T](Message[T]):
 
 
 @t.final
-class UnpackedMessage[T](Message[T]):
+class DecodedMessage[T](Message[T]):
+    """
+    A message that has a decoded body.
+
+    Applications should not use this class directly. Use consumer with decoder to decode messages before handling them
+    with application level data in `body`.
+    """
+
     __slots__ = (
         "__body",
         "__original",

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from brokrpc.message import Message, PackedMessage, UnpackedMessage
+from brokrpc.message import DecodedMessage, EncodedMessage, Message
 from brokrpc.model import BrokRPCError
 
 type Request[T] = Message[T]
 type BinaryRequest = Message[bytes]
-type PackedRequest[T] = PackedMessage[T]
-type UnpackedRequest[T] = UnpackedMessage[T]
+type PackedRequest[T] = EncodedMessage[T]
+type UnpackedRequest[T] = DecodedMessage[T]
 
 type Response[T] = Message[T]
 type BinaryResponse = Message[bytes]
-type PackedResponse[T] = PackedMessage[T]
-type UnpackedResponse[T] = UnpackedMessage[T]
+type PackedResponse[T] = EncodedMessage[T]
+type UnpackedResponse[T] = DecodedMessage[T]
 
 
 class ServerError(BrokRPCError):
